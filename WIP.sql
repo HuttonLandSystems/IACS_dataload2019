@@ -274,6 +274,16 @@ INNER JOIN sub1 USING (mlc_hahol_id,
                        year); -- 178 rows
 --! default to RGR over PGRS?
 
+
+
+
+
+
+
+
+
+
+
 --JOIN -- but how to ensure whole hapar_id or nothing?!
 SELECT p.mlc_hahol_id,
        s.mlc_hahol_id,
@@ -310,30 +320,62 @@ SELECT p.mlc_hahol_id,
        END AS change_note
 FROM temp_permanent p
 JOIN temp_seasonal s USING (hapar_id,
-                            year)
+year)
 ORDER BY hapar_id, year;
 
+
+
+
+
+
+         
 /* CASE
        WHEN p.land_activity = ''
-            OR s.land_activity = '' THEN CONCAT (p.land_activity, s.land_activity)
+            OR s.land_activity = '' THEN CONCAT (p.land_activity, ', ', s.land_activity)
        ELSE s.land_activity
    END AS land_activity,*/
 
+    
+-- TODO         bps_claimed_area 
+SELECT * 
+FROM temp_permanent
+WHERE bps_claimed_area > bps_eligible_area
 
-   --TODO               fixing owners/renters in wrong table 
 
-
-WITH perms AS
-        (SELECT *
-         FROM temp_permanent
-         WHERE change_note LIKE 'P record%')
+--Step 2d. Correct bps_claimed_area > land_parcel_area claims?
 SELECT *
-FROM temp_permanent AS t
-JOIN perms USING (hapar_id,
-                  land_use,
-                  year)
-WHERE perms.habus_id <> t.habus_id;
+FROM
+    (SELECT mlc_hahol_id,
+            habus_id,
+            hahol_id,
+            hapar_id,
+            year,
+            land_parcel_area,
+            sum(bps_claimed_area) AS sum_bps
+     FROM temp_seasonal
+     GROUP BY mlc_hahol_id,
+              habus_id,
+              hahol_id,
+              hapar_id,
+              land_parcel_area,
+              year) foo
+WHERE land_parcel_area < sum_bps
 
+
+
+--! check percentages wrong
+SELECT *
+FROM
+    (SELECT hapar_id,
+            year,
+            (land_parcel_area/land_use_area) AS percent_right
+     FROM singles_p
+     WHERE land_use_area > land_parcel_area) foo
+WHERE percent_right < 0.95
+ORDER BY percent_right
+
+
+--! Weird cases need looking ---------------------------------------------
 SELECT * 
 FROM rpid.saf_permanent_land_parcels_deliv20190911 splpd
 WHERE hapar_id = 1146 AND YEAR <> 2019
@@ -342,3 +384,13 @@ SELECT *
 FROM rpid.saf_seasonal_land_parcels_deliv20190911 sslpd 
 WHERE hapar_id = 1146 AND YEAR <> 2019
 ORDER BY YEAR, is_perm_flag, habus_id
+
+-- particular hapar_id where different land_use and in one case different land_use_area
+SELECT * 
+FROM temp_seasonal
+WHERE hapar_id = 438015
+UNION 
+SELECT * 
+FROM temp_permanent 
+WHERE hapar_id = 438015
+ORDER BY year 

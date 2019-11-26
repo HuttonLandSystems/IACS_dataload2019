@@ -3,7 +3,7 @@ After preliminary cleaning
 
 1,926,682 in perm table     1,826,482 perm only		100,200 to join
 175,489 in seas table       96,936 seas only		78,553 to join
-
+2,102,171 total
 
 --*2019 Data Load
 1. Create temp tables, remove select rows, add select columns
@@ -37,9 +37,9 @@ After preliminary cleaning
         marks other associated rows to move to permanent based on above
         moves marked records to respective tables
             
-
 5. Move rows into separate tables       
         move mutually exclusive hapar_ids to separate table
+        separate claims on parcels (which exists in both p and s sheets but) which are only claimed by one party for one year
 
 6. Joins       
 
@@ -664,7 +664,7 @@ WITH mult_busses AS
               year)
 UPDATE temp_permanent AS t
 SET claim_id_p = 'S' || TRIM('P'
-                                  FROM t.claim_id_p),
+                                  FROM t.claim_id_p) || '_01',
     is_perm_flag = 'N',
     change_note = CONCAT(t.change_note, 'S record moved from permanent to seasonal sheet; ')
 FROM temp_permanent AS a
@@ -721,7 +721,7 @@ SET land_leased_out = (CASE
                            ELSE t.land_leased_out
                        END),
     claim_id_s = 'P' || TRIM('S'
-                                  from t.claim_id_s),
+                                  from t.claim_id_s) || '_01',
     is_perm_flag = 'Y',
     change_note = CONCAT(t.change_note, 'P record moved from seasonal to permanent sheet; ')
 FROM temp_seasonal AS a
@@ -745,9 +745,11 @@ WHERE sum_bps = 0
 --mark owners in seasonal table by LLO flag 
 UPDATE temp_seasonal
 SET is_perm_flag = 'Y',
-claim_id_s = 'P' || TRIM('S' from claim_id_s),
-change_note = CONCAT(change_note, 'P record moved from seasonal to permanent sheet; ')
-WHERE land_leased_out = 'Y' AND claim_id_s NOT LIKE '%P%'; --updates 1,432 rows
+    claim_id_s = 'P' || TRIM('S'
+                             from claim_id_s) || '_01',
+    change_note = CONCAT(change_note, 'P record moved from seasonal to permanent sheet; ')
+WHERE land_leased_out = 'Y'
+    AND claim_id_s NOT LIKE '%P%'; --updates 1,432 rows
 
 --moves marked records to respective tables
 INSERT INTO temp_permanent 
@@ -767,7 +769,7 @@ WHERE claim_id_p LIKE '%S%'; -- moves 23 rows
 ---------------------------------------TODO GOOD up to this point ------------------------------------------- 2,100,285 total
 
 --*STEP 6. Combine
---mutually exclusive 
+--move mutually exclusive hapar_ids to separate table 
 DROP TABLE IF EXISTS combine; 
 SELECT mlc_hahol_id AS owner_mlc_hahol_id,
        NULL :: BIGINT AS user_mlc_hahol_id,
@@ -844,372 +846,124 @@ DELETE
 FROM temp_seasonal AS t USING combine
 WHERE t.hapar_id = combine.hapar_id;
 
---! up to this point 
-
-    
-
-    
--- TODO         bps_claimed_area 
-SELECT * 
-FROM temp_permanent
-WHERE bps_claimed_area > bps_eligible_area
-
-
---Step 2d. Correct bps_claimed_area > land_parcel_area claims?
-SELECT *
-FROM
-    (SELECT mlc_hahol_id,
-            habus_id,
-            hahol_id,
-            hapar_id,
-            year,
-            land_parcel_area,
-            sum(bps_claimed_area) AS sum_bps
-     FROM temp_seasonal
-     GROUP BY mlc_hahol_id,
-              habus_id,
-              hahol_id,
-              hapar_id,
-              land_parcel_area,
-              year) foo
-WHERE land_parcel_area < sum_bps
-
-
-
-
---Step 3. Join P and S on all possible variables
-CREATE TEMP TABLE temp_combine AS
-SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
-       s.mlc_hahol_id AS user_mlc_hahol_id,
-       p.habus_id AS owner_habus_id,
-       s.habus_id AS user_habus_id,
-       p.hahol_id AS owner_hahol_id,
-       s.hahol_id AS user_hahol_id,
-       hapar_id,
-       land_parcel_area,
-       bps_eligible_area,
-       bps_claimed_area,
-       verified_exclusion,
-       land_use_area,
-       land_use,
-       p.land_activity,
-       p.application_status,
-       p.land_leased_out AS p_LLO,
-       s.land_leased_out AS s_LLO,
-       p.lfass_flag,
-       s.is_perm_flag,
-       claim_id_p,
-       claim_id_s,
-       year
-FROM temp_permanent AS p
-JOIN temp_seasonal AS s USING (hahol_id,
-                               hapar_id,
-                               land_parcel_area,
-                               bps_eligible_area,
-                               bps_claimed_area,
-                               verified_exclusion,
-                               land_use_area,
-                               land_use,
-                               year,
-                               land_activity,
-                               application_status,
-                               lfass_flag); -- 2,233 rows (same with/out hahol_id)
-
-
-
---!     particular hapar_id where different land_use and in one case different land_use_area
-SELECT * 
-FROM temp_seasonal
-WHERE hapar_id = 438015
-UNION 
-SELECT * 
-FROM temp_permanent 
-WHERE hapar_id = 438015
-ORDER BY year 
-
-
-
-
-
---!             START JOIN              --! 
-CREATE TEMP TABLE combined (owner_mlc_hahol_id int8,
-                            user_mlc_hahol_id int8, 
-                            owner_habus_id int8, 
-                            user_habus_id int8, 
-                            owner_hahol_id int8, 
-                            user_hahol_id int8, 
-                            hapar_id int8, 
-                            land_parcel_area numeric, 
-                            bps_eligible_area numeric, 
-                            bps_claimed_area numeric, 
-                            verified_exclusion numeric, 
-                            land_use_area numeric, 
-                            land_use VARCHAR, 
-                            land_activity VARCHAR, 
-                            application_status VARCHAR, 
-                            land_leased_out VARCHAR, 
-                            lfass_flag VARCHAR, 
-                            is_perm_flag VARCHAR, 
-                            claim_id_p int4,
-                            claim_id_s int4,
-                            year int2,
-                            change_note VARCHAR);
-
-INSERT INTO combined (owner_mlc_hahol_id,
-                        user_mlc_hahol_id,
-                        owner_habus_id,
-                        user_habus_id,
-                        owner_hahol_id,
-                        user_hahol_id,
-                        hapar_id,
-                        land_parcel_area,
-                        bps_eligible_area,
-                        bps_claimed_area,
-                        verified_exclusion,
-                        land_use_area,
-                        land_use,
-                        land_activity,
-                        application_status,
-                        land_leased_out,
-                        lfass_flag,
-                        is_perm_flag,
-                        claim_id_p,
-                        claim_id_s,
-                        year,
-                        change_note)
-
-WITH grp_singlehapar_p AS
-    (SELECT hapar_id,
-            year,
-            claim_id_p
-     FROM
-         (SELECT hapar_id,
-                 year,
-                 COUNT(*)
-          FROM temp_permanent
-          GROUP BY hapar_id,
-                   year
-          ORDER BY hapar_id,
-                   year) foo
-     JOIN temp_permanent USING (hapar_id,
-                                year)
-     WHERE count = 1 ),
-     grp_singlehapar_s AS
-    (SELECT hapar_id,
-            year,
-            claim_id_s
-     FROM
-         (SELECT hapar_id,
-                 year,
-                 COUNT(*)
-          FROM temp_permanent
-          GROUP BY hapar_id,
-                   year
-          ORDER BY hapar_id,
-                   year) foo
-     JOIN temp_seasonal USING (hapar_id,
-                               year)
-     WHERE count = 1 )
-SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
-       s.mlc_hahol_id AS user_mlc_hahol_id,
-       p.habus_id AS owner_habus_id,
-       s.habus_id AS user_habus_id,
-       p.hahol_id AS owner_hahol_id,
-       s.hahol_id AS user_hahol_id,
-       hapar_id,
-       land_parcel_area,
-       bps_eligible_area,
-       p.verified_exclusion, --which one to pick?
-       land_use_area,
-       land_use,
-       p.land_activity,
-       p.application_status,
-       'Y' AS land_leased_out, --default to yes because join
-       p.lfass_flag,
-       s.is_perm_flag,
-       claim_id_p,
-       claim_id_s,
-       year,
-       p.change_note
-FROM temp_permanent AS p
-JOIN temp_seasonal AS s USING (hahol_id,
-                               hapar_id,
-                               land_parcel_area,
-                               bps_eligible_area,
-                               land_use_area,
-                               land_use,
-                               year)
-WHERE claim_id_p IN
-        (SELECT claim_id_p
-         FROM grp_singlehapar_p)
-    AND claim_id_s IN
-        (SELECT claim_id_s
-         FROM grp_singlehapar_s)
-
-
-
-
---TODO join by hapar_id
-SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
-       s.mlc_hahol_id AS user_mlc_hahol_id,
-       p.habus_id AS owner_habus_id,
-       s.habus_id AS user_habus_id,
-       p.hahol_id AS owner_hahol_id,
-       s.hahol_id AS user_hahol_id,
-       hapar_id,
-       p.land_parcel_area AS p_land_parcel_area,
-       s.land_parcel_area AS s_land_parcel_area,
-       p.bps_eligible_area AS p_bps_elig,
-       s.bps_eligible_area AS s_bps_elig,
-       p.bps_claimed_area AS p_bps_claim,
-       s.bps_claimed_area AS s_bps_claim,
-       p.verified_exclusion,
-       p.land_use_area AS p_land_use_area,
-       s.land_use_area AS s_land_use_area,
-       land_use,
-       p.land_activity,
-       p.application_status,
-       p.land_leased_out AS p_LLO,
-       s.land_leased_out AS s_LLO,
-       p.lfass_flag,
-       s.is_perm_flag,
-       claim_id_p,
-       claim_id_s,
-       year
-FROM temp_permanent AS p
-JOIN temp_seasonal AS s USING ( hapar_id,
-                                land_use,
-                                year);
-
-
-
---hapar_id not in permanent  sheet, LLO yes
-CREATE TEMP TABLE switch_to_perm AS 
+--separate claims on parcels (which exists in both p and s sheets but) which are only claimed by one party for one year
+--      [join where hapar_id match but year doesn't, and NOT IN join using (hapar_id, year)]
+DROP TABLE WHERE EXISTS p_only;
 WITH sub AS
-    (SELECT *
+    (SELECT CONCAT (hapar_id, ', ', YEAR)
+     FROM temp_permanent p
+     JOIN temp_seasonal s USING (hapar_id,
+                                 year)
+     GROUP BY hapar_id,
+              year),
+     p_sub AS
+    (SELECT SPLIT_PART(p_id, ', ', 1):: int AS hapar_id,
+            SPLIT_PART(p_id, ', ', 2):: int AS YEAR
      FROM
-         (SELECT hapar_id,
-                 year,
-                 string_agg(land_leased_out :: VARCHAR, '')
-          FROM temp_seasonal
-          GROUP BY hapar_id,
-                   year) foo
-     WHERE string_agg LIKE '%Y%')
-SELECT *
-FROM temp_seasonal AS s
-WHERE hapar_id NOT IN
-        (SELECT DISTINCT hapar_id
-         FROM temp_permanent)
-    AND hapar_id IN
-        (SELECT hapar_id
-         FROM sub);
-	
-SELECT mlc_hahol_id,
-       habus_id,
-       hahol_id,
+         (SELECT DISTINCT p_id
+          FROM
+              (SELECT CONCAT(hapar_id, ', ', year) AS p_id
+               FROM temp_permanent) foo
+          WHERE p_id NOT IN
+                  (SELECT *
+                   FROM sub)) foo)
+SELECT * INTO TEMP TABLE p_only
+FROM p_sub
+JOIN temp_permanent USING (hapar_id,
+                           year);
+INSERT INTO combine
+SELECT mlc_hahol_id AS owner_mlc_hahol_id,
+       NULL :: BIGINT AS user_mlc_hahol_id,
+       habus_id AS owner_habus_id,
+       NULL :: BIGINT AS user_habus_id,
+       hahol_id AS owner_hahol_id,
+       NULL :: BIGINT AS user_hahol_id,
        hapar_id,
+       land_parcel_area AS owner_land_parcel_area,
+       NULL :: BIGINT AS user_land_parcel_area,
+       bps_eligible_area AS owner_bps_eligible_area,
+       NULL :: BIGINT AS user_bps_eligible_area,
+       bps_claimed_area AS owner_bps_claimed_area,
+       NULL :: BIGINT AS user_bps_claimed_area,
+       verified_exclusion AS owner_verified_exclusion,
+       NULL :: BIGINT AS user_verified_exclusion,
+       land_use_area AS owner_land_use_area,
+       NULL :: BIGINT AS user_land_use_area,
+       land_use AS owner_land_use,
+       NULL :: VARCHAR AS user_land_use,
+       land_activity AS owner_land_activity,
+       NULL :: VARCHAR AS user_land_activity,
+       application_status AS owner_application_status,
+       NULL :: VARCHAR AS user_application_status,
+       land_leased_out,
+       lfass_flag AS owner_lfass_flag,
+       NULL :: VARCHAR AS user_lfass_flag,
+       claim_id_p AS claim_id,
        year,
-       sum(bps_claimed_area),
-       string_agg(land_leased_out :: VARCHAR, '')
-FROM switch_to_perm
-GROUP BY mlc_hahol_id,
-         habus_id,
-         hahol_id,
-         hapar_id,
-         year
+       change_note
+FROM p_only;
+DELETE
+FROM temp_permanent AS t USING combine
+WHERE t.claim_id_p = combine.claim_id; -- moves 39,671 rows to combine table
 
-
-SELECT *
-FROM temp_seasonal AS s
-WHERE hapar_id NOT IN
-        (SELECT DISTINCT hapar_id
-         FROM temp_permanent)
-    AND hapar_id IN
-        (SELECT hapar_id
-         FROM
-             (SELECT hapar_id,
-                     year,
-                     string_agg(land_leased_out :: VARCHAR, '')
-              FROM temp_seasonal
-              GROUP BY hapar_id,
-                       year) foo
-         WHERE string_agg LIKE '%Y%')
-
-
-SELECT mlc_hahol_id,
-       habus_id,
-       hahol_id,
+WITH sub AS
+    (SELECT CONCAT (hapar_id, ', ', YEAR)
+     FROM temp_permanent p
+     JOIN temp_seasonal s USING (hapar_id,
+                                 year)
+     GROUP BY hapar_id,
+              year),
+     s_sub AS
+    (SELECT SPLIT_PART(s_id, ', ', 1):: int AS hapar_id,
+            SPLIT_PART(s_id, ', ', 2):: int AS YEAR
+     FROM
+         (SELECT DISTINCT s_id
+          FROM
+              (SELECT CONCAT(hapar_id, ', ', year) AS s_id
+               FROM temp_seasonal) foo
+          WHERE s_id NOT IN
+                  (SELECT *
+                   FROM sub)) foo)
+SELECT * INTO TEMP TABLE s_only
+FROM s_sub
+JOIN temp_seasonal USING (hapar_id,
+                          year); 
+INSERT INTO combine 
+SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
+       mlc_hahol_id AS user_mlc_hahol_id,
+       NULL :: BIGINT AS owner_habus_id,
+       habus_id AS user_habus_id,
+       NULL :: BIGINT AS owner_hahol_id,
+       hahol_id AS user_hahol_id,
        hapar_id,
+       NULL :: BIGINT AS owner_land_parcel_area, 
+       land_parcel_area AS user_land_parcel_area,
+       NULL :: BIGINT AS owner_bps_eligible_area,
+       bps_eligible_area AS user_bps_eligible_area,
+       NULL :: BIGINT AS owner_bps_claimed_area,
+       bps_claimed_area AS user_bps_claimed_area,
+       NULL :: BIGINT AS owner_verified_exclusion,
+       verified_exclusion AS user_verified_exclusion,
+       NULL :: BIGINT AS owner_land_use_area,
+       land_use_area AS user_land_use_area,
+       NULL :: VARCHAR AS owner_land_use,
+       land_use AS user_land_use,
+       NULL :: VARCHAR AS owner_land_activity,
+       land_activity AS user_land_activity,
+       NULL :: VARCHAR AS owner_application_status,
+       application_status AS user_application_status,
+       land_leased_out,
+       NULL :: VARCHAR AS owner_lfass_flag,
+       lfass_flag AS user_lfass_flag,
+       claim_id_s AS claim_id,
        year,
-       sum(bps_claimed_area) AS sum_bps,
-       string_agg(land_leased_out :: VARCHAR, '')
-FROM
-    (SELECT *
-     FROM temp_seasonal AS s
-     WHERE hapar_id IN
-             (SELECT DISTINCT hapar_id
-              FROM temp_permanent)
-         AND hapar_id IN
-             (SELECT hapar_id
-              FROM
-                  (SELECT hapar_id,
-                          year,
-                          string_agg(land_leased_out :: VARCHAR, '')
-                   FROM temp_seasonal
-                   GROUP BY hapar_id,
-                            year) foo
-              WHERE string_agg LIKE '%Y%'))
-GROUP BY mlc_hahol_id,
-         habus_id,
-         hahol_id,
-         hapar_id,
-         year
+       change_note
+FROM s_only;
+DELETE
+FROM temp_seasonal AS t USING combine
+WHERE t.claim_id_s = combine.claim_id; --moves 16,575 rows to combine table
 
+--! up to this point 
+61,037 perm
+61,088 seasonal    
 
---PRELIM JOIN for main tables
---! problem: this leaves out potential claims from same hapar_id
---so make into temp table and check if hapar_id exists in old table
-SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
-       s.mlc_hahol_id AS user_mlc_hahol_id,
-       p.habus_id AS owner_habus_id,
-       s.habus_id AS user_habus_id,
-       p.hahol_id AS owner_hahol_id,
-       s.hahol_id AS user_hahol_id,
-       hapar_id,
-       land_parcel_area,
-       bps_eligible_area,
-       s.bps_claimed_area,
-       verified_exclusion,
-       land_use_area,
-       p.land_use AS owner_land_use,
-       s.land_use AS user_land_use,
-       s.land_activity,
-       s.application_status,
-       'Y' AS land_leased_out,
-       s.lfass_flag,
-       claim_id_p,
-       claim_id_s,
-       year,
-       CONCAT(p.change_note, s.change_note) AS change_note
-FROM temp_permanent AS p
-JOIN temp_seasonal AS s USING (hapar_id,
-                               land_parcel_area,
-                               bps_eligible_area,
-                               verified_exclusion,
-                               land_use_area,
-                               year)
-WHERE p.land_leased_out = 'Y'
-    AND s.land_leased_out = 'N'
-ORDER BY change_note DESC; --26,086 combined rows
-
-
---! check percentages wrong
-SELECT *
-FROM
-    (SELECT hapar_id,
-            year,
-            (land_parcel_area/land_use_area) AS percent_right
-     FROM singles_p
-     WHERE land_use_area > land_parcel_area) foo
-WHERE percent_right < 0.95
-ORDER BY percent_right
