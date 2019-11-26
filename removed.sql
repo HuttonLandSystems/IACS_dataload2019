@@ -1104,3 +1104,138 @@ WHERE p.land_leased_out = 'Y'
 ORDER BY change_note DESC; --26,086 combined rows
 
 
+--sum land_use_area where all else match and combine claim_ids (except on those marked as LLO)
+INSERT INTO temp_permanent
+SELECT *
+FROM
+    (SELECT mlc_hahol_id,
+            habus_id,
+            hahol_id,
+            hapar_id,
+            land_parcel_area,
+            bps_eligible_area,
+            bps_claimed_area,
+            verified_exclusion,
+            sum(land_use_area) AS land_use_area,
+            land_use,
+            land_activity,
+            application_status,
+            land_leased_out,
+            lfass_flag,
+            is_perm_flag,
+            string_agg(claim_id_p :: VARCHAR, ', ') AS claim_id_p,
+            year,
+            CONCAT(change_note, 'summed land_use_areas where all else match / combined claim_ids; ')
+     FROM temp_permanent
+     GROUP BY mlc_hahol_id,
+              habus_id,
+              hahol_id,
+              hapar_id,
+              land_parcel_area,
+              bps_eligible_area,
+              bps_claimed_area,
+              verified_exclusion,
+              land_use,
+              land_activity,
+              application_status,
+              land_leased_out,
+              lfass_flag,
+              is_perm_flag,
+              change_note,
+              year) foo
+WHERE claim_id_p LIKE '%,%'
+    AND land_leased_out <> 'Y'; --inserts 282 rows 
+
+INSERT INTO temp_seasonal
+SELECT *
+FROM
+    (SELECT mlc_hahol_id,
+            habus_id,
+            hahol_id,
+            hapar_id,
+            land_parcel_area,
+            bps_eligible_area,
+            bps_claimed_area,
+            verified_exclusion,
+            sum(land_use_area) AS land_use_area,
+            land_use,
+            land_activity,
+            application_status,
+            land_leased_out,
+            lfass_flag,
+            is_perm_flag,
+            string_agg(claim_id_s :: VARCHAR, ', ') AS claim_id_s,
+            year,
+            CONCAT(change_note, 'summed land_use_areas where all else match / combined claim_ids; ')
+     FROM temp_seasonal
+     GROUP BY mlc_hahol_id,
+              habus_id,
+              hahol_id,
+              hapar_id,
+              land_parcel_area,
+              bps_eligible_area,
+              bps_claimed_area,
+              verified_exclusion,
+              land_use,
+              land_activity,
+              application_status,
+              land_leased_out,
+              lfass_flag,
+              is_perm_flag,
+              change_note,
+              year) foo
+WHERE claim_id_s LIKE '%,%'
+    AND land_leased_out <> 'Y'; --inserts 8 rows 
+
+-- delete single areas where summed above
+WITH sub AS
+    (SELECT *
+     FROM temp_permanent
+     WHERE change_note LIKE '%summed%')
+DELETE
+FROM temp_permanent AS p
+WHERE EXISTS
+        (SELECT *
+         FROM sub
+         WHERE p.mlc_hahol_id = sub.mlc_hahol_id
+             AND p.habus_id = sub.habus_id
+             AND p.hahol_id = sub.hahol_id
+             AND p.hapar_id = sub.hapar_id
+             AND p.land_parcel_area = sub.land_parcel_area
+             AND p.bps_eligible_area = sub.bps_eligible_area
+             AND p.bps_claimed_area = sub.bps_claimed_area
+             AND p.verified_exclusion = sub.verified_exclusion
+             AND p.land_use = sub.land_use
+             AND p.land_activity = sub.land_activity
+             AND p.application_status = sub.application_status
+             AND p.land_leased_out = sub.land_leased_out
+             AND p.lfass_flag = sub.lfass_flag
+             AND p.is_perm_flag = sub.is_perm_flag
+             AND p.year = sub.year)
+    AND p.change_note IS NULL; --removes 565 rows
+
+WITH sub AS
+    (SELECT *
+     FROM temp_seasonal
+     WHERE change_note LIKE '%summed%')
+DELETE
+FROM temp_seasonal AS p
+WHERE EXISTS
+        (SELECT *
+         FROM sub
+         WHERE p.mlc_hahol_id = sub.mlc_hahol_id
+             AND p.habus_id = sub.habus_id
+             AND p.hahol_id = sub.hahol_id
+             AND p.hapar_id = sub.hapar_id
+             AND p.land_parcel_area = sub.land_parcel_area
+             AND p.bps_eligible_area = sub.bps_eligible_area
+             AND p.bps_claimed_area = sub.bps_claimed_area
+             AND p.verified_exclusion = sub.verified_exclusion
+             AND p.land_use = sub.land_use
+             AND p.land_activity = sub.land_activity
+             AND p.application_status = sub.application_status
+             AND p.land_leased_out = sub.land_leased_out
+             AND p.lfass_flag = sub.lfass_flag
+             AND p.is_perm_flag = sub.is_perm_flag
+             AND p.year = sub.year)
+    AND p.change_note IS NULL; --removes 16 rows 

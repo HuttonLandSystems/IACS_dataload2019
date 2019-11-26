@@ -1,6 +1,11 @@
 --! Do everything by FID and not claim
 --! FID level analysis, no claim level
 
+
+--TODO      compare owner_land_parcel_area and user_land_parcel_area 
+--TODO      compare owner_bps_eligible_area and user_bps_eligible_area 
+
+
 --------------------------------------------------
 -- Finds single land use claims per hapar_id and year
 SELECT *
@@ -15,7 +20,6 @@ FROM
               year) foo
 WHERE dupes <> lu_count
 --------------------------------------------------
-
 -- LOW PRIORITY land_leased_out records flagged YES in Seasonal table repeated with different habus_ids
 SELECT seas.habus_id,
        llo.habus_id,
@@ -36,34 +40,7 @@ INNER JOIN
      WHERE land_leased_out = 'Y') AS llo ON seas.hapar_id = llo.hapar_id
 AND seas.year = llo.year
 AND seas.habus_id <> llo.habus_id; -- returns 946 records but there are 1,386 total records flagged YES in seasonal f_table_catalog (120 missing)
-
-
-
 --------------------------------------------------------------------------
---this is a nice little piece of code
-SELECT hapar_id, year
-FROM
-    (SELECT hapar_id,
-            land_parcel_area,
-            land_use_area,
-            land_use,
-            year,
-            SUM(land_use_area) OVER(PARTITION BY hapar_id, year) AS sum_lua
-     FROM temp_saf_permanent_only) foo
-     GROUP BY hapar_id, year
-WHERE sum_lua < land_parcel_area
---------------------------------------
-SELECT hapar_id,
-       land_parcel_area,
-       year,
-       SUM(land_use_area) AS sum_lua
-FROM temp_saf_permanent_only
-GROUP BY hapar_id,
-         land_parcel_area,
-         year
-HAVING SUM(land_use_area) < land_parcel_area
--------------------------------------------------------------------------
-
 --TODO      MIS-match original perms to spatial layer for year 2018
 WITH subq AS
     ( SELECT hapar_id,
@@ -249,13 +226,6 @@ FROM temp_permanent
 WHERE hapar_id = 472985 has two imputed records ! WHY. because hahol_id is null and doesnt match - not related
 */
 
-
-
-
-
-
-
-
 WITH sub1 AS
     (SELECT *
      FROM temp_permanent
@@ -273,16 +243,6 @@ INNER JOIN sub1 USING (mlc_hahol_id,
                        land_parcel_area,
                        year); -- 178 rows
 --! default to RGR over PGRS?
-
-
-
-
-
-
-
-
-
-
 
 --JOIN -- but how to ensure whole hapar_id or nothing?!
 SELECT p.mlc_hahol_id,
@@ -322,25 +282,17 @@ FROM temp_permanent p
 JOIN temp_seasonal s USING (hapar_id,
 year)
 ORDER BY hapar_id, year;
-
-
-
-
-
-
-         
+        
 /* CASE
        WHEN p.land_activity = ''
             OR s.land_activity = '' THEN CONCAT (p.land_activity, ', ', s.land_activity)
        ELSE s.land_activity
    END AS land_activity,*/
-
     
 -- TODO         bps_claimed_area 
 SELECT * 
 FROM temp_permanent
 WHERE bps_claimed_area > bps_eligible_area
-
 
 --Step 2d. Correct bps_claimed_area > land_parcel_area claims?
 SELECT *
@@ -361,8 +313,6 @@ FROM
               year) foo
 WHERE land_parcel_area < sum_bps
 
-
-
 --! check percentages wrong
 SELECT *
 FROM
@@ -373,7 +323,6 @@ FROM
      WHERE land_use_area > land_parcel_area) foo
 WHERE percent_right < 0.95
 ORDER BY percent_right
-
 
 --! Weird cases need looking ---------------------------------------------
 SELECT * 
