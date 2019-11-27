@@ -343,3 +343,111 @@ SELECT *
 FROM temp_permanent 
 WHERE hapar_id = 438015
 ORDER BY year 
+
+
+UPDATE test_join
+SET owner_mlc_hahol_id = user_mlc_hahol_id,
+    user_mlc_hahol_id = owner_mlc_hahol_id,
+    owner_habus_id = user_habus_id,
+    user_habus_id = owner_habus_id,
+    owner_hahol_id = user_hahol_id,
+    user_hahol_id = owner_hahol_id,
+    owner_land_parcel_area = user_land_parcel_area,
+    user_land_parcel_area = owner_land_parcel_area,
+    owner_bps_eligible_area = user_bps_eligible_area,
+    user_bps_eligible_area = owner_bps_eligible_area,
+    owner_bps_claimed_area = user_bps_claimed_area,
+    user_bps_claimed_area = owner_bps_claimed_area,
+    owner_verified_exclusion = user_verified_exclusion,
+    user_verified_exclusion = owner_verified_exclusion,
+    owner_land_use_area = user_land_use_area,
+    user_land_use_area = owner_land_use_area,
+    owner_land_use = user_land_use,
+    user_land_use = owner_land_use,
+    owner_land_activity = user_land_activity,
+    user_land_activity = owner_land_activity,
+    owner_application_status = user_application_status,
+    user_application_status = owner_application_status,
+    land_leased_out = 'Y',
+    owner_lfass_flag = user_lfass_flag,
+    user_lfass_flag = owner_lfass_flag,
+    change_note = CONCAT(change_note, 'swapped owner/renter; ')
+WHERE change_note LIKE '%first%'
+    AND owner_bps_claimed_area <> 0
+    AND user_bps_claimed_area = 0
+
+--*STEP 4. Find renter records in wrong tables 
+--finds multiple businesses claiming on same land in permanent table and marks them as seasonal, and vice versa
+
+WITH find_switches AS
+    (SELECT hapar_id,
+            YEAR
+     FROM
+         (SELECT hapar_id,
+                 YEAR,
+                 sum(owner_bps_claimed_area) AS owner_bps,
+                 sum(user_bps_claimed_area) AS user_bps
+          FROM
+              (SELECT hapar_id,
+                      p.bps_claimed_area AS owner_bps_claimed_area,
+                      s.bps_claimed_area AS user_bps_claimed_area,
+                      year
+               FROM temp_permanent AS p
+               JOIN temp_seasonal AS s USING (hapar_id,
+                                              year,
+                                              land_use,
+                                              land_use_area)) foo
+          GROUP BY hapar_id,
+                   YEAR) foo2
+     WHERE owner_bps <> 0
+         AND user_bps = 0)
+UPDATE temp_permanent AS t
+SET land_leased_out = (CASE
+                           WHEN t.land_use <> 'EXCL' THEN 'Y'
+                           ELSE t.land_leased_out
+                       END),
+    claim_id_p = 'S' || TRIM('P'
+                             FROM t.claim_id_p) || '_01',
+    is_perm_flag = 'N',
+    change_note = CONCAT(t.change_note, 'S record moved from permanent to seasonal sheet; ')
+FROM find_switches AS a
+JOIN temp_permanent AS b USING (hapar_id,
+                                year)
+WHERE t.hapar_id = a.hapar_id
+    AND t.year = a.year; --6,214 rows
+
+WITH find_switches AS
+    (SELECT hapar_id,
+            YEAR
+     FROM
+         (SELECT hapar_id,
+                 YEAR,
+                 sum(owner_bps_claimed_area) AS owner_bps,
+                 sum(user_bps_claimed_area) AS user_bps
+          FROM
+              (SELECT hapar_id,
+                      p.bps_claimed_area AS owner_bps_claimed_area,
+                      s.bps_claimed_area AS user_bps_claimed_area,
+                      year
+               FROM temp_permanent AS p
+               JOIN temp_seasonal AS s USING (hapar_id,
+                                              year,
+                                              land_use,
+                                              land_use_area)) foo
+          GROUP BY hapar_id,
+                   YEAR) foo2
+     WHERE owner_bps <> 0
+         AND user_bps = 0)
+UPDATE temp_seasonal AS t
+SET land_leased_out = (CASE
+                           WHEN t.land_use <> 'EXCL' THEN 'Y'
+                           ELSE t.land_leased_out
+                       END),
+    claim_id_s = 'P' || TRIM('S'
+                             from t.claim_id_s) || '_01',
+    is_perm_flag = 'Y',
+    change_note = CONCAT(t.change_note, 'P record moved from seasonal to permanent sheet; ')  
+FROM find_switches AS a 
+JOIN temp_seasonal AS b USING (hapar_id, year)
+WHERE t.hapar_id = a.hapar_id AND 
+t.year = a.year; --  6,231 rows  

@@ -486,7 +486,7 @@ DELETE FROM temp_seasonal
 WHERE land_use_area IS NULL; --removes 1,187 rows
 
 --*STEP 4. Find renter records in wrong tables 
---finds multiple businesses claiming on same land in permanent table and marks them as seasonal, and vice versa
+--finds multiple businesses claiming on same land in same table and marks them as either owner/renter
 WITH mult_busses AS
     (SELECT *
      FROM
@@ -597,14 +597,80 @@ WHERE sum_bps = 0
     AND t.hapar_id = a.hapar_id
     AND t.year = a.year; --updates 1,178 rows
 
---mark owners in seasonal table by LLO flag 
-UPDATE temp_seasonal
-SET is_perm_flag = 'Y',
+--finds swapped owner/renters (owners in seasonal table and renters in permanent table that join on hapar_id, year, land_use, land_use_area) 
+WITH find_switches AS
+    (SELECT hapar_id,
+            YEAR
+     FROM
+         (SELECT hapar_id,
+                 YEAR,
+                 sum(owner_bps_claimed_area) AS owner_bps,
+                 sum(user_bps_claimed_area) AS user_bps
+          FROM
+              (SELECT hapar_id,
+                      p.bps_claimed_area AS owner_bps_claimed_area,
+                      s.bps_claimed_area AS user_bps_claimed_area,
+                      year
+               FROM temp_permanent AS p
+               JOIN temp_seasonal AS s USING (hapar_id,
+                                              year,
+                                              land_use,
+                                              land_use_area)) foo
+          GROUP BY hapar_id,
+                   YEAR) foo2
+     WHERE owner_bps <> 0
+         AND user_bps = 0)
+UPDATE temp_permanent AS t
+SET land_leased_out = (CASE
+                           WHEN t.land_use <> 'EXCL' THEN 'Y'
+                           ELSE t.land_leased_out
+                       END),
+    claim_id_p = 'S' || TRIM('P'
+                             FROM t.claim_id_p) || '_01',
+    is_perm_flag = 'N',
+    change_note = CONCAT(t.change_note, 'S record moved from permanent to seasonal sheet; ')
+FROM find_switches AS a
+JOIN temp_permanent AS b USING (hapar_id,
+                                year)
+WHERE t.hapar_id = a.hapar_id
+    AND t.year = a.year; --6,214 rows
+
+WITH find_switches AS
+    (SELECT hapar_id,
+            YEAR
+     FROM
+         (SELECT hapar_id,
+                 YEAR,
+                 sum(owner_bps_claimed_area) AS owner_bps,
+                 sum(user_bps_claimed_area) AS user_bps
+          FROM
+              (SELECT hapar_id,
+                      p.bps_claimed_area AS owner_bps_claimed_area,
+                      s.bps_claimed_area AS user_bps_claimed_area,
+                      year
+               FROM temp_permanent AS p
+               JOIN temp_seasonal AS s USING (hapar_id,
+                                              year,
+                                              land_use,
+                                              land_use_area)) foo
+          GROUP BY hapar_id,
+                   YEAR) foo2
+     WHERE owner_bps <> 0
+         AND user_bps = 0)
+UPDATE temp_seasonal AS t
+SET land_leased_out = (CASE
+                           WHEN t.land_use <> 'EXCL' THEN 'Y'
+                           ELSE t.land_leased_out
+                       END),
     claim_id_s = 'P' || TRIM('S'
-                             from claim_id_s) || '_01',
-    change_note = CONCAT(change_note, 'P record moved from seasonal to permanent sheet; ')
-WHERE land_leased_out = 'Y'
-    AND claim_id_s NOT LIKE '%P%'; --updates 1,432 rows
+                             from t.claim_id_s) || '_01',
+    is_perm_flag = 'Y',
+    change_note = CONCAT(t.change_note, 'P record moved from seasonal to permanent sheet; ')
+FROM find_switches AS a
+JOIN temp_seasonal AS b USING (hapar_id,
+                               year)
+WHERE t.hapar_id = a.hapar_id
+    AND t.year = a.year; --  6,231 rows  
 
 --moves marked records to respective tables
 INSERT INTO temp_permanent 
@@ -612,14 +678,14 @@ SELECT *
 FROM temp_seasonal 
 WHERE claim_id_s LIKE '%P%';
 DELETE FROM temp_seasonal 
-WHERE claim_id_s LIKE '%P%'; --moves 2,610 rows
+WHERE claim_id_s LIKE '%P%'; --moves 7,366 rows
 
 INSERT INTO temp_seasonal 
 SELECT * 
 FROM temp_permanent 
 WHERE claim_id_p LIKE '%S%';
 DELETE FROM temp_permanent 
-WHERE claim_id_p LIKE '%S%'; -- moves 23 rows 
+WHERE claim_id_p LIKE '%S%'; -- moves 6,237 rows 
 
 --*STEP 5. Combine mutually exclusive
 --move mutually exclusive hapar_ids to separate table 
@@ -659,7 +725,7 @@ WHERE hapar_id NOT IN
          FROM temp_seasonal); 
 DELETE
 FROM temp_permanent AS t USING combine
-WHERE t.hapar_id = combine.hapar_id; --moves 1,828,159 rows
+WHERE t.hapar_id = combine.hapar_id; --moves 1,826,740 rows
 
 INSERT INTO combine 
 SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
@@ -697,9 +763,9 @@ WHERE hapar_id NOT IN
          FROM temp_permanent); 
 DELETE
 FROM temp_seasonal AS t USING combine
-WHERE t.hapar_id = combine.hapar_id; --move 94,038 rows
+WHERE t.hapar_id = combine.hapar_id; --move 94,584 rows
 
---separate claims on parcels (which exists in both p and s sheets but) which are only claimed by one party for one year
+--separate claims on parcels (which exist in both p and s sheets but) which are only claimed by one party for one year
 --      [join where hapar_id match but year doesn't, and NOT IN join using (hapar_id, year)]
 DROP TABLE IF EXISTS p_only;
 WITH sub AS
@@ -757,7 +823,7 @@ SELECT mlc_hahol_id AS owner_mlc_hahol_id,
 FROM p_only;
 DELETE
 FROM temp_permanent AS t USING combine
-WHERE t.claim_id_p = combine.claim_id; -- moves 39,669 rows
+WHERE t.claim_id_p = combine.claim_id; -- moves 39,567 rows
 
 DROP TABLE IF EXISTS s_only;
 WITH sub AS
@@ -815,10 +881,10 @@ SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
 FROM s_only;
 DELETE
 FROM temp_seasonal AS t USING combine
-WHERE t.claim_id_s = combine.claim_id; --moves 16,576 rows to combine table
+WHERE t.claim_id_s = combine.claim_id; --moves 16,764 rows to combine table
 
 --*Step 6. Join
---first join on hapar_id, year, and land_use
+--first join on hapar_id, year, land_use, land_use_area
 DROP TABLE IF EXISTS test_join; 
 SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        s.mlc_hahol_id AS user_mlc_hahol_id,
@@ -850,19 +916,19 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        year,
        CASE
            WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note)
+                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note, 'first join; ')
            WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN s.change_note
+                AND s.change_note IS NOT NULL THEN CONCAT(s.change_note, 'first join; ')
            WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN p.change_note
+                AND p.change_note IS NOT NULL THEN CONCAT(p.change_note, 'first join; ')
            WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN NULL
+                AND s.change_note IS NULL THEN 'first join; '
        END AS change_note INTO TEMP TABLE test_join
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
                                land_use,
-                               land_use_area); --45,055 rows
+                               land_use_area); --45,687 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -913,13 +979,13 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        year,
        CASE
            WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note)
+                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note, 'second join; ')
            WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN s.change_note
+                AND s.change_note IS NOT NULL THEN CONCAT(s.change_note, 'second join; ')
            WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN p.change_note
+                AND p.change_note IS NOT NULL THEN CONCAT(p.change_note, 'second join; ')
            WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN NULL
+                AND s.change_note IS NULL THEN 'second join; '
        END AS change_note 
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
@@ -943,7 +1009,7 @@ DELETE
 FROM temp_seasonal AS t USING joined_ids AS a  
 WHERE t.claim_id_s = a.claim_id_s; --7,144 rows --TODO Why isnt it 7,518?     
 
---third join on hapar_id, year 
+--third join on hapar_id, year, land_use_area
 INSERT INTO test_join 
 SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        s.mlc_hahol_id AS user_mlc_hahol_id,
@@ -975,17 +1041,18 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        year,
        CASE
            WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note)
+                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note, 'third join; ')
            WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN s.change_note
+                AND s.change_note IS NOT NULL THEN CONCAT(s.change_note, 'third join; ')
            WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN p.change_note
+                AND p.change_note IS NOT NULL THEN CONCAT(p.change_note, 'third join; ')
            WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN NULL
+                AND s.change_note IS NULL THEN 'third join; '
        END AS change_note 
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
-                               year); --6,528 rows
+                               year,
+                               land_use_area); --4,172 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -994,7 +1061,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 5,771 rows --TODO Why isnt it 6,528?
+WHERE t.claim_id_p = a.claim_id_p; -- 4,168 rows --TODO Why isnt it 4,172?
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
@@ -1002,7 +1069,68 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --5,963 rows --TODO Why isnt it 6,528?     
+WHERE t.claim_id_s = a.claim_id_s; --4,170 rows --TODO Why isnt it 4,172?  
+
+--fourth join on hapar_id, year 
+INSERT INTO test_join 
+SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
+       s.mlc_hahol_id AS user_mlc_hahol_id,
+       p.habus_id AS owner_habus_id,
+       s.habus_id AS user_habus_id,
+       p.hahol_id AS owner_hahol_id,
+       s.hahol_id AS user_hahol_id,
+       hapar_id,
+       p.land_parcel_area AS owner_land_parcel_area,
+       s.land_parcel_area AS user_land_parcel_area,
+       p.bps_eligible_area AS owner_bps_eligible_area,
+       s.bps_eligible_area AS user_bps_eligible_area,
+       p.bps_claimed_area AS owner_bps_claimed_area,
+       s.bps_claimed_area AS user_bps_claimed_area,
+       p.verified_exclusion AS owner_verified_exclusion,
+       s.verified_exclusion AS user_verified_exclusion,
+       p.land_use_area AS owner_land_use_area,
+       s.land_use_area AS user_land_use_area,
+       p.land_use AS owner_land_use,
+       s.land_use AS user_land_use,
+       p.land_activity AS owner_land_activity,
+       s.land_activity AS user_land_activity,
+       p.application_status AS owner_application_status,
+       s.application_status AS user_application_status,
+       p.land_leased_out,
+       p.lfass_flag AS owner_lfass_flag,
+       s.lfass_flag AS user_lfass_flag,
+       CONCAT(claim_id_p, ', ', claim_id_s) AS claim_id,
+       year,
+       CASE
+           WHEN p.change_note IS NOT NULL
+                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note, 'fourth join; ')
+           WHEN p.change_note IS NULL
+                AND s.change_note IS NOT NULL THEN CONCAT(s.change_note, 'fourth join; ')
+           WHEN s.change_note IS NULL
+                AND p.change_note IS NOT NULL THEN CONCAT(p.change_note, 'fourth join; ')
+           WHEN p.change_note IS NULL
+                AND s.change_note IS NULL THEN 'fourth join; '
+       END AS change_note 
+FROM temp_permanent AS p
+JOIN temp_seasonal AS s USING (hapar_id,
+                               year); --2,202 rows
+
+--delete from original table where join above
+WITH joined_ids AS (
+SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
+       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+FROM test_join)
+DELETE 
+FROM temp_permanent AS t USING joined_ids AS a  
+WHERE t.claim_id_p = a.claim_id_p; -- 1,550 rows --TODO Why isnt it 2,202?
+
+WITH joined_ids AS (
+SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
+       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+FROM test_join)
+DELETE 
+FROM temp_seasonal AS t USING joined_ids AS a  
+WHERE t.claim_id_s = a.claim_id_s; --1,744 rows --TODO Why isnt it 2,202?     
 
 --! up to this point 
 --3,320 perm leftover

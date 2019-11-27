@@ -1239,3 +1239,15 @@ WHERE EXISTS
              AND p.is_perm_flag = sub.is_perm_flag
              AND p.year = sub.year)
     AND p.change_note IS NULL; --removes 16 rows 
+
+
+
+
+--mark owners in seasonal table by LLO flag 
+UPDATE temp_seasonal
+SET is_perm_flag = 'Y',
+    claim_id_s = 'P' || TRIM('S'
+                             from claim_id_s) || '_01',
+    change_note = CONCAT(change_note, 'P record moved from seasonal to permanent sheet; ')
+WHERE land_leased_out = 'Y'
+    AND claim_id_s NOT LIKE '%P%'; --updates 1,432 rows
