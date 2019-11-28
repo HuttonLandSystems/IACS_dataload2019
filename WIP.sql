@@ -451,3 +451,30 @@ FROM find_switches AS a
 JOIN temp_seasonal AS b USING (hapar_id, year)
 WHERE t.hapar_id = a.hapar_id AND 
 t.year = a.year; --  6,231 rows  
+
+
+SELECT CONCAT(hapar_id, ', ', YEAR)
+FROM temp_permanent p
+JOIN temp_seasonal s USING (hapar_id,
+                            year)
+GROUP BY hapar_id,
+         year
+
+
+
+SELECT CONCAT(hapar_id, ', ', year)
+FROM temp_permanent
+UNION
+SELECT CONCAT(hapar_id, ', ', year)
+FROM temp_seasonal        
+
+SELECT CONCAT,
+       ROW_NUMBER () OVER (PARTITION BY concat)
+FROM
+    (SELECT CONCAT(hapar_id, ', ', year)
+     FROM temp_permanent
+     UNION SELECT CONCAT(hapar_id, ', ', year)
+     FROM temp_seasonal) foo
+     GROUP BY CONCAT
+
+

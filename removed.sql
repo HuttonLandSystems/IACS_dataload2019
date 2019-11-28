@@ -1251,3 +1251,123 @@ SET is_perm_flag = 'Y',
     change_note = CONCAT(change_note, 'P record moved from seasonal to permanent sheet; ')
 WHERE land_leased_out = 'Y'
     AND claim_id_s NOT LIKE '%P%'; --updates 1,432 rows
+
+
+
+--separate claims on parcels (which exist in both p and s sheets but) which are only claimed by one party for one year
+--      [join where hapar_id match but year doesn't, and NOT IN join using (hapar_id, year)]
+DROP TABLE IF EXISTS p_only;
+WITH sub AS
+    (SELECT CONCAT (hapar_id, ', ', YEAR)
+     FROM temp_permanent p
+     JOIN temp_seasonal s USING (hapar_id,
+                                 year)
+     GROUP BY hapar_id,
+              year),
+     p_sub AS
+    (SELECT SPLIT_PART(p_id, ', ', 1):: int AS hapar_id,
+            SPLIT_PART(p_id, ', ', 2):: int AS YEAR
+     FROM
+         (SELECT DISTINCT p_id
+          FROM
+              (SELECT CONCAT(hapar_id, ', ', year) AS p_id
+               FROM temp_permanent) foo
+          WHERE p_id NOT IN
+                  (SELECT *
+                   FROM sub)) foo)
+SELECT * INTO TEMP TABLE p_only
+FROM p_sub
+JOIN temp_permanent USING (hapar_id,
+                           year);
+INSERT INTO combine
+SELECT mlc_hahol_id AS owner_mlc_hahol_id,
+       NULL :: BIGINT AS user_mlc_hahol_id,
+       habus_id AS owner_habus_id,
+       NULL :: BIGINT AS user_habus_id,
+       hahol_id AS owner_hahol_id,
+       NULL :: BIGINT AS user_hahol_id,
+       hapar_id,
+       land_parcel_area AS owner_land_parcel_area,
+       NULL :: BIGINT AS user_land_parcel_area,
+       bps_eligible_area AS owner_bps_eligible_area,
+       NULL :: BIGINT AS user_bps_eligible_area,
+       bps_claimed_area AS owner_bps_claimed_area,
+       NULL :: BIGINT AS user_bps_claimed_area,
+       verified_exclusion AS owner_verified_exclusion,
+       NULL :: BIGINT AS user_verified_exclusion,
+       land_use_area AS owner_land_use_area,
+       NULL :: BIGINT AS user_land_use_area,
+       land_use AS owner_land_use,
+       NULL :: VARCHAR AS user_land_use,
+       land_activity AS owner_land_activity,
+       NULL :: VARCHAR AS user_land_activity,
+       application_status AS owner_application_status,
+       NULL :: VARCHAR AS user_application_status,
+       land_leased_out,
+       lfass_flag AS owner_lfass_flag,
+       NULL :: VARCHAR AS user_lfass_flag,
+       claim_id_p AS claim_id,
+       year,
+       change_note
+FROM p_only;
+DELETE
+FROM temp_permanent AS t USING combine
+WHERE t.claim_id_p = combine.claim_id; -- moves 39,567 rows
+
+DROP TABLE IF EXISTS s_only;
+WITH sub AS
+    (SELECT CONCAT (hapar_id, ', ', YEAR)
+     FROM temp_permanent p
+     JOIN temp_seasonal s USING (hapar_id,
+                                 year)
+     GROUP BY hapar_id,
+              year),
+     s_sub AS
+    (SELECT SPLIT_PART(s_id, ', ', 1):: int AS hapar_id,
+            SPLIT_PART(s_id, ', ', 2):: int AS YEAR
+     FROM
+         (SELECT DISTINCT s_id
+          FROM
+              (SELECT CONCAT(hapar_id, ', ', year) AS s_id
+               FROM temp_seasonal) foo
+          WHERE s_id NOT IN
+                  (SELECT *
+                   FROM sub)) foo)
+SELECT * INTO TEMP TABLE s_only
+FROM s_sub
+JOIN temp_seasonal USING (hapar_id,
+                          year); 
+INSERT INTO combine 
+SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
+       mlc_hahol_id AS user_mlc_hahol_id,
+       NULL :: BIGINT AS owner_habus_id,
+       habus_id AS user_habus_id,
+       NULL :: BIGINT AS owner_hahol_id,
+       hahol_id AS user_hahol_id,
+       hapar_id,
+       NULL :: BIGINT AS owner_land_parcel_area, 
+       land_parcel_area AS user_land_parcel_area,
+       NULL :: BIGINT AS owner_bps_eligible_area,
+       bps_eligible_area AS user_bps_eligible_area,
+       NULL :: BIGINT AS owner_bps_claimed_area,
+       bps_claimed_area AS user_bps_claimed_area,
+       NULL :: BIGINT AS owner_verified_exclusion,
+       verified_exclusion AS user_verified_exclusion,
+       NULL :: BIGINT AS owner_land_use_area,
+       land_use_area AS user_land_use_area,
+       NULL :: VARCHAR AS owner_land_use,
+       land_use AS user_land_use,
+       NULL :: VARCHAR AS owner_land_activity,
+       land_activity AS user_land_activity,
+       NULL :: VARCHAR AS owner_application_status,
+       application_status AS user_application_status,
+       land_leased_out,
+       NULL :: VARCHAR AS owner_lfass_flag,
+       lfass_flag AS user_lfass_flag,
+       claim_id_s AS claim_id,
+       year,
+       change_note
+FROM s_only;
+DELETE
+FROM temp_seasonal AS t USING combine
+WHERE t.claim_id_s = combine.claim_id; --moves 16,764 rows to combine table
