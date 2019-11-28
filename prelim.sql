@@ -478,12 +478,15 @@ WHERE (land_use_area = 0
        OR land_use_area IS NULL)
     AND bps_claimed_area <> 0; --update 1 rows
 
---delete land_use_area IS NULL 
-DELETE FROM temp_permanent 
-WHERE land_use_area IS NULL; --removes 353 rows
 
-DELETE FROM temp_seasonal 
-WHERE land_use_area IS NULL; --removes 1,187 rows
+--set remaining NULL land_use_area to 0
+UPDATE temp_permanent 
+SET land_use_area = 0 
+WHERE land_use_area IS NULL; --updates 353 rows 
+
+UPDATE temp_seasonal
+SET land_use_area = 0 
+WHERE land_use_area IS NULL; --updates 1,187 rows
 
 --*STEP 4. Find renter records in wrong tables 
 --finds multiple businesses claiming on same land in same table and marks them as either owner/renter
@@ -538,7 +541,7 @@ WHERE sum_bps <> 0
     AND t.habus_id = a.habus_id
     AND t.hahol_id = a.hahol_id
     AND t.hapar_id = a.hapar_id
-    AND t.year = a.year; --updates 23 rows
+    AND t.year = a.year; --updates 49 rows
 
 WITH mult_busses AS
     (SELECT *
@@ -595,7 +598,7 @@ WHERE sum_bps = 0
     AND t.habus_id = a.habus_id
     AND t.hahol_id = a.hahol_id
     AND t.hapar_id = a.hapar_id
-    AND t.year = a.year; --updates 1,178 rows
+    AND t.year = a.year; --updates 1,421 rows
 
 --moves marked records to respective tables
 INSERT INTO temp_permanent 
@@ -603,14 +606,14 @@ SELECT *
 FROM temp_seasonal 
 WHERE claim_id_s LIKE '%P%';
 DELETE FROM temp_seasonal 
-WHERE claim_id_s LIKE '%P%'; --moves 7,366 rows
+WHERE claim_id_s LIKE '%P%'; --moves 1,421 rows
 
 INSERT INTO temp_seasonal 
 SELECT * 
 FROM temp_permanent 
 WHERE claim_id_p LIKE '%S%';
 DELETE FROM temp_permanent 
-WHERE claim_id_p LIKE '%S%';
+WHERE claim_id_p LIKE '%S%'; -- moves 49 rows
 
 --finds swapped owner/renters (owners in seasonal table and renters in permanent table that join on hapar_id, year, land_use, land_use_area) 
 WITH find_switches AS
@@ -648,7 +651,7 @@ FROM find_switches AS a
 JOIN temp_permanent AS b USING (hapar_id,
                                 year)
 WHERE t.hapar_id = a.hapar_id
-    AND t.year = a.year; --6,214 rows
+    AND t.year = a.year; --updates 6,240 rows
 
 WITH find_switches AS
     (SELECT hapar_id,
@@ -685,7 +688,7 @@ FROM find_switches AS a
 JOIN temp_seasonal AS b USING (hapar_id,
                                year)
 WHERE t.hapar_id = a.hapar_id
-    AND t.year = a.year; --  6,231 rows  
+    AND t.year = a.year; -- updates 6,175 rows  
 
 --moves marked records to respective tables
 INSERT INTO temp_permanent 
@@ -693,14 +696,14 @@ SELECT *
 FROM temp_seasonal 
 WHERE claim_id_s LIKE '%P%';
 DELETE FROM temp_seasonal 
-WHERE claim_id_s LIKE '%P%'; --moves 7,366 rows
+WHERE claim_id_s LIKE '%P%'; --moves 6,175 rows
 
 INSERT INTO temp_seasonal 
 SELECT * 
 FROM temp_permanent 
 WHERE claim_id_p LIKE '%S%';
 DELETE FROM temp_permanent 
-WHERE claim_id_p LIKE '%S%'; -- moves 6,237 rows 
+WHERE claim_id_p LIKE '%S%'; -- moves 6,240 rows 
 
 --*STEP 5. Combine mutually exclusive
 --move mutually exclusive hapar_ids to separate table 
@@ -740,7 +743,7 @@ WHERE hapar_id NOT IN
          FROM temp_seasonal); 
 DELETE
 FROM temp_permanent AS t USING combine
-WHERE t.hapar_id = combine.hapar_id; --moves 1,826,740 rows
+WHERE t.hapar_id = combine.hapar_id; --moves 1,826,367 rows
 
 INSERT INTO combine 
 SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
@@ -778,7 +781,7 @@ WHERE hapar_id NOT IN
          FROM temp_permanent); 
 DELETE
 FROM temp_seasonal AS t USING combine
-WHERE t.hapar_id = combine.hapar_id; --move 94,584 rows
+WHERE t.hapar_id = combine.hapar_id; --move 94,501 rows
 
 --*Step 6. Join
 --first join on hapar_id, year, land_use, land_use_area
@@ -825,7 +828,7 @@ FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
                                land_use,
-                               land_use_area); --45,687 rows
+                               land_use_area); --45,710 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -834,7 +837,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 45,389 rows --TODO Why isnt it 45,687?
+WHERE t.claim_id_p = a.claim_id_p; -- 45,366 rows 
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
@@ -842,7 +845,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --45,275 rows --TODO Why isnt it 45,687? 
+WHERE t.claim_id_s = a.claim_id_s; --45,344 rows 
 
 --second join on hapar_id, year, land_use 
 INSERT INTO test_join 
@@ -887,7 +890,7 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
-                               land_use); --7,438 rows
+                               land_use); --8,162 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -896,7 +899,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 7,221 rows --TODO Why isnt it 7,438?
+WHERE t.claim_id_p = a.claim_id_p; -- 7,896 rows 
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
@@ -904,7 +907,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --7,215 rows --TODO Why isnt it 7,438?     
+WHERE t.claim_id_s = a.claim_id_s; --7,881 rows 
 
 --third join on hapar_id, year, land_use_area
 INSERT INTO test_join 
@@ -949,7 +952,7 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
-                               land_use_area); --4,283 rows
+                               land_use_area); --4,267 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -958,7 +961,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 4,279 rows --TODO Why isnt it 4,283?
+WHERE t.claim_id_p = a.claim_id_p; -- 4,263 rows
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
@@ -966,7 +969,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --4,281 rows --TODO Why isnt it 4,283?  
+WHERE t.claim_id_s = a.claim_id_s; --4,267 rows 
 
 --fourth join on hapar_id, year 
 INSERT INTO test_join 
@@ -1010,7 +1013,7 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        END AS change_note 
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
-                               year); --2,192 rows
+                               year); --2,289 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -1019,7 +1022,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 1,551 rows --TODO Why isnt it 2,192?
+WHERE t.claim_id_p = a.claim_id_p; -- 1,626 rows 
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
@@ -1027,12 +1030,9 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM test_join)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --1,728 rows --TODO Why isnt it 2,192?     
+WHERE t.claim_id_s = a.claim_id_s; --1,810 rows 
 
---! up to this point 
---3,320 perm leftover
---3,361 seasonal leftover 
-
+--last mutually exclusive ones
 INSERT INTO combine
 SELECT mlc_hahol_id AS owner_mlc_hahol_id,
        NULL :: BIGINT AS user_mlc_hahol_id,
@@ -1063,7 +1063,7 @@ SELECT mlc_hahol_id AS owner_mlc_hahol_id,
        claim_id_p AS claim_id,
        year,
        change_note
-FROM temp_permanent;  --last 42,233 rows 
+FROM temp_permanent;  --last 42,426 rows 
 DROP TABLE IF EXISTS temp_permanent; 
 
 INSERT INTO combine 
@@ -1096,5 +1096,13 @@ SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
        claim_id_s AS claim_id,
        year,
        change_note
-FROM temp_seasonal; --last 20,080 rows
+FROM temp_seasonal; --last 20,369 rows
 DROP TABLE IF EXISTS temp_seasonal;
+
+--*Step 7. Combine all into last table
+CREATE TEMP TABLE last_step AS 
+SELECT * 
+FROM combine 
+UNION 
+SELECT * 
+FROM test_join --2,044,091

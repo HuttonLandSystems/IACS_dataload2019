@@ -1371,3 +1371,12 @@ FROM s_only;
 DELETE
 FROM temp_seasonal AS t USING combine
 WHERE t.claim_id_s = combine.claim_id; --moves 16,764 rows to combine table
+
+
+
+/*--delete land_use_area IS NULL 
+DELETE FROM temp_permanent 
+WHERE land_use_area IS NULL; --removes 353 rows
+
+DELETE FROM temp_seasonal 
+WHERE land_use_area IS NULL; --removes 1,187 rows*/
