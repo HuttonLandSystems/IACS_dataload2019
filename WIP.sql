@@ -445,4 +445,17 @@ FROM
      FROM temp_seasonal) foo
 GROUP BY CONCAT --update mutually exclusive records with LLO yes from seasonal table
 
-SELECT change_note, COUNT(*) FROM combine  GROUP BY change_note ORDER BY count DESC
+SELECT * 
+FROM joined
+WHERE owner_land_parcel_area <> user_land_parcel_area
+ORDER BY YEAR, hapar_id
+
+SELECT * 
+FROM rpid.saf_permanent_land_parcels_deliv20190911 
+WHERE hapar_id = 295139 AND YEAR = 2016
+UNION 
+SELECT * 
+FROM rpid.saf_seasonal_land_parcels_deliv20190911 
+WHERE hapar_id = 295139 AND YEAR = 2016
+ORDER BY habus_id
+

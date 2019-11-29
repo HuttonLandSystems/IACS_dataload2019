@@ -80,3 +80,10 @@ FROM (
                      land_parcel_area) seas_s ON seas_s.hapar_id = perm_s.hapar_id
       AND lua_sea = lua_per)
 WHERE cnt_per != cnt_sea
+
+--See changes made by count
+SELECT change_note,
+       COUNT(*)
+FROM combine
+GROUP BY change_note
+ORDER BY count DESC
