@@ -459,3 +459,20 @@ FROM rpid.saf_seasonal_land_parcels_deliv20190911
 WHERE hapar_id = 295139 AND YEAR = 2016
 ORDER BY habus_id
 
+--This code checks to see if land_parcel_area is the same for each year
+SELECT *
+FROM
+    (SELECT hapar_id,
+            YEAR,
+            row_number() OVER (PARTITION BY hapar_id,
+                                            YEAR,
+                                            user_land_parcel_area)
+     FROM
+         (SELECT hapar_id,
+                 YEAR,
+                 user_land_parcel_area
+          FROM joined
+          GROUP BY hapar_id,
+                   YEAR,
+                   user_land_parcel_area) foo) foo2
+WHERE ROW_NUMBER > 1

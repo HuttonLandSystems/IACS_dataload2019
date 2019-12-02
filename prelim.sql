@@ -488,7 +488,6 @@ WHERE (land_use_area = 0
        OR land_use_area IS NULL)
     AND bps_claimed_area <> 0; --update 1 rows*/
 
-
 --set remaining NULL land_use_area to 0
 UPDATE temp_permanent 
 SET land_use_area = 0 
@@ -497,8 +496,6 @@ WHERE land_use_area IS NULL; --updates 353 rows
 UPDATE temp_seasonal
 SET land_use_area = 0 
 WHERE land_use_area IS NULL; --updates 1,187 rows
-
-
 
 --*STEP 4. Find renter records in wrong tables 
 --finds multiple businesses claiming on same land in same table and marks them as either owner/renter
