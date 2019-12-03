@@ -16,14 +16,16 @@ FROM
 GROUP BY 1
 ORDER BY count DESC;
 
-Equal	     1,949,038
-Parcel < LU	10,753
-Parcel > LU	56
+Equal	     1,542,209
+Parcel > LU	349,954
+Parcel < LU	6,112
+
 (10809/1959847)*100 = 0.55% <-- permanent
 
-Equal	     174,793
-Parcel < LU	5,179
-Parcel > LU	261
+Equal	     127,451
+Parcel > LU	39,547
+Parcel < LU	5,085
+
 (5440/180233)*100 = 3.01% <-- seasonal
 
 
