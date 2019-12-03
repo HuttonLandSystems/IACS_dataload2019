@@ -1372,11 +1372,239 @@ DELETE
 FROM temp_seasonal AS t USING combine
 WHERE t.claim_id_s = combine.claim_id; --moves 16,764 rows to combine table
 
-
-
-/*--delete land_use_area IS NULL 
+--delete land_use_area IS NULL 
 DELETE FROM temp_permanent 
 WHERE land_use_area IS NULL; --removes 353 rows
 
 DELETE FROM temp_seasonal 
-WHERE land_use_area IS NULL; --removes 1,187 rows*/
+WHERE land_use_area IS NULL; --removes 1,187 rows
+
+--removes records "Waiting for deadline/inspection" AND (bps_eligible_area = 0 and percent = 0)
+WITH wait_status AS
+    (SELECT hapar_id,
+            land_parcel_area,
+            year,
+            sum_lua,
+            percent,
+            application_status,
+            bps_eligible_area,
+            land_use_area
+     FROM
+         (SELECT hapar_id,
+                 land_parcel_area,
+                 land_use_area,
+                 land_use,
+                 year,
+                 application_status,
+                 bps_eligible_area,
+                 SUM(land_use_area) OVER(PARTITION BY hapar_id, land_parcel_area, year) AS sum_lua,
+                 (SUM(land_use_area) OVER(PARTITION BY hapar_id, land_parcel_area, year) / land_parcel_area) * 100 AS percent
+          FROM temp_permanent) foo
+     WHERE (sum_lua = 0
+            or sum_lua IS NULL)
+         AND application_status LIKE '%Wait%'
+         OR (bps_eligible_area = 0
+             AND percent = 0))
+DELETE
+FROM temp_permanent USING wait_status
+WHERE temp_permanent.hapar_id = wait_status.hapar_id
+    AND temp_permanent.year = wait_status.year; -- removes 26 rows 
+
+WITH wait_status AS
+    (SELECT hapar_id,
+            land_parcel_area,
+            year,
+            sum_lua,
+            percent,
+            application_status,
+            bps_eligible_area,
+            land_use_area
+     FROM
+         (SELECT hapar_id,
+                 land_parcel_area,
+                 land_use_area,
+                 land_use,
+                 year,
+                 application_status,
+                 bps_eligible_area,
+                 SUM(land_use_area) OVER(PARTITION BY hapar_id, land_parcel_area, year) AS sum_lua,
+                 (SUM(land_use_area) OVER(PARTITION BY hapar_id, land_parcel_area, year) / land_parcel_area) * 100 AS percent
+          FROM temp_seasonal) foo
+     WHERE (sum_lua = 0
+            or sum_lua IS NULL)
+         AND application_status LIKE '%Wait%'
+         OR (bps_eligible_area = 0
+             AND percent = 0))
+DELETE
+FROM temp_seasonal USING wait_status
+WHERE temp_seasonal.hapar_id = wait_status.hapar_id
+    AND temp_seasonal.year = wait_status.year; -- removes 9 rows
+
+
+--infer land_use_area from bps_claimed_area where 0 
+UPDATE temp_permanent
+SET land_use_area = bps_claimed_area,
+    change_note = CONCAT(change_note, 'land_use_area inferred from bps_claimed_area; ')
+WHERE (land_use_area = 0
+       OR land_use_area IS NULL)
+    AND bps_claimed_area <> 0; --updates 11 rows
+
+UPDATE temp_seasonal
+SET land_use_area = bps_claimed_area,
+    change_note = CONCAT(change_note, 'land_use_area inferred from bps_claimed_area; ')
+WHERE (land_use_area = 0
+       OR land_use_area IS NULL)
+    AND bps_claimed_area <> 0; --update 1 rows   
+
+ --------------------------------------------------
+-- Finds single land use claims per hapar_id and year
+
+SELECT *
+FROM
+    (SELECT hapar_id,
+            year,
+            COUNT(Distinct land_use) as dupes,
+            COUNT(land_use) as lu_count,
+            SUM(land_use_area) as sum_lu
+     FROM temp_permanent
+     GROUP BY hapar_id,
+              year) foo
+WHERE dupes <> lu_count --------------------------------------------------
+-- LOW PRIORITY land_leased_out records flagged YES in Seasonal table repeated with different habus_ids
+
+    SELECT seas.habus_id,
+           llo.habus_id,
+           seas.hahol_id,
+           llo.hahol_id,
+           seas.hapar_id,
+           llo.hapar_id,
+           seas.land_use,
+           llo.land_use,
+           seas.land_use_area,
+           llo.land_use_area,
+           seas.land_leased_out,
+           llo.land_leased_out
+    FROM temp_seasonal as seas
+    INNER JOIN
+        (SELECT *
+         FROM temp_seasonal
+         WHERE land_leased_out = 'Y') AS llo ON seas.hapar_id = llo.hapar_id
+    AND seas.year = llo.year
+    AND seas.habus_id <> llo.habus_id; -- returns 946 records but there are 1,386 total records flagged YES in seasonal f_table_catalog (120 missing)
+
+--------------------------------------------------------------------------
+--TODO      MIS-match original perms to spatial layer for year 2018
+
+WITH subq AS
+    (SELECT hapar_id,
+            year,
+            sum(land_use_area)
+     FROM rpid.saf_permanent_land_parcels_deliv20190911
+     WHERE land_use_area <> 0
+         AND year = 2018
+     GROUP BY hapar_id,
+              year)
+SELECT *
+FROM rpid.lpis_land_parcels_2019_jhi_deliv20190911 AS spat
+INNER JOIN subq ON spat.hapar_id = subq.hapar_id
+WHERE ROUND(spat.digi_area, 2) <> subq.sum --TODO      -------------------------------------------------------
+
+-- Finds most of the multiple claims on same-year seasonal parcels
+-- waiting for answer from Allen at RPID ...
+
+    SELECT *
+    FROM
+        (SELECT hapar_id,
+                land_parcel_area,
+                sum(land_use_area) OVER(PARTITION BY hapar_id, year) AS sum_lua,
+                sum(bps_claimed_area) OVER(PARTITION BY hapar_id, year) AS sum_bps_e,
+                year
+         FROM temp_seasonal) foo WHERE land_parcel_area < sum_lua --  AND land_parcel_area < sum_bps_e
+
+    SELECT *
+    FROM
+        (SELECT hapar_id,
+                land_parcel_area,
+                sum(land_use_area) OVER (PARTITION BY hapar_id,
+                                                      land_parcel_area,
+                                                      year) AS sum_lua,
+                                        YEAR
+         FROM temp_permanent) foo WHERE land_parcel_area = sum_lua --TODO      Find all the records in seasonal sheet that need to be moves to permanent sheet with LLO switched to yes
+
+    SELECT *
+    FROM
+        (SELECT hapar_id,
+                COUNT(hapar_id)
+         FROM
+             (SELECT hapar_id,
+                     land_parcel_area,
+                     year
+              FROM temp_permanent
+              GROUP BY hapar_id,
+                       land_parcel_area,
+                       year) foo
+         GROUP BY hapar_id) foo WHERE COUNT > 1
+ORDER BY count DESC
+SELECT *
+FROM
+    (SELECT mlc_hahol_id,
+            habus_id,
+            hapar_id,
+            year,
+            string_agg(land_leased_out :: text, '')
+     FROM temp_seasonal
+     GROUP BY mlc_hahol_id,
+              habus_id,
+              hapar_id,
+              year) foo
+WHERE string_agg LIKE '%Y%'
+    SELECT *
+    FROM temp_seasonal Where hapar_id = 393938
+UNION
+SELECT *
+FROM temp_permanent
+WHERE hapar_id = 393938
+ORDER BY year,
+         is_perm_flag,
+         land_use,
+         habus_id 
+
+
+/*n. --FIXED-- Single lonely claims occuring only once in all tables */ -- changes is_perm_flag to N for seasonal claims found in permanent table
+
+    UPDATE temp_permanent AS t
+    SET is_perm_flag = 'N',
+        change_note = CONCAT(t.change_note, 'is_perm_flag changed to N; '),
+        claim_id_p = CONCAT('s', t.claim_id_p)
+    FROM temp_permanent
+    JOIN
+        (SELECT hapar_id,
+                year
+         FROM
+             (SELECT hapar_id,
+                     YEAR,
+                     land_parcel_area/sum_lua AS per_right
+              FROM
+                  (SELECT hapar_id,
+                          YEAR,
+                          land_parcel_area,
+                          sum(land_use_area) OVER (PARTITION BY hapar_id,
+                                                                year) AS sum_lua
+                   FROM temp_permanent) foo
+              WHERE land_parcel_area < sum_lua) foo2
+         GROUP BY hapar_id,
+                  YEAR,
+                  per_right
+         HAVING per_right = 0.5) sub USING (hapar_id,
+                                            year) WHERE t.hapar_id = sub.hapar_id
+    AND t.YEAR = sub.YEAR
+    AND t.land_leased_out = 'N'; --updates 51 rows         
+
+
+
+-- below is a duplicate
+
+SELECT *
+FROM temp_seasonal
+WHERE hapar_id = 211520
+ORDER BY year --! check this bit out -- there's more seasonal than permanent */    
