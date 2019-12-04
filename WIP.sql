@@ -3,6 +3,8 @@
 --TODO      compare owner_land_parcel_area and user_land_parcel_area
 --TODO      compare owner_bps_eligible_area and user_bps_eligible_area
 
+--TODO check claimed_area vs land_parcel-area
+
 SELECT *
 FROM
     (SELECT mlc_hahol_id,

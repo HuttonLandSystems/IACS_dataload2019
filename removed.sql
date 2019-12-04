@@ -1755,6 +1755,7 @@ SET owner_mlc_hahol_id = user_mlc_hahol_id,
 WHERE change_note LIKE '%first%'
     AND owner_bps_claimed_area <> 0
     AND user_bps_claimed_area = 0 --*STEP 4. Find renter records in wrong tables
+    
 --finds multiple businesses claiming on same land in permanent table and marks them as seasonal, and vice versa
  WITH find_switches AS
         (SELECT hapar_id,
