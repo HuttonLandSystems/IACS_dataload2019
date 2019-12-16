@@ -5,6 +5,58 @@
 
 --TODO check claimed_area vs land_parcel-area
 
+--!weird case with 36 ha of BUILDING and no matching land_uses
+SELECT * 
+FROM rpid.saf_permanent_land_parcels_deliv20190911 splpd
+WHERE hapar_id = 212811  AND YEAR = 2017
+UNION 
+SELECT * 
+FROM rpid.saf_seasonal_land_parcels_deliv20190911 sslpd
+WHERE hapar_id = 212811 AND YEAR = 2017
+ORDER BY YEAR, is_perm_flag
+
+--!last checks 
+SELECT hapar_id,
+owner_verified_exclusion,
+user_verified_exclusion,
+       CASE
+           WHEN owner_verified_exclusion > user_verified_exclusion THEN owner_verified_exclusion - user_verified_exclusion
+           WHEN user_verified_exclusion > owner_verified_exclusion THEN user_verified_exclusion - owner_verified_exclusion
+           WHEN owner_verified_exclusion = owner_land_use_area THEN 0 
+           WHEN user_verified_exclusion = user_land_use_area THEN 0 
+           ELSE 9999999999           
+       END AS verified_exclusion_diff,
+       change_note
+FROM joined
+WHERE owner_verified_exclusion <> user_verified_exclusion
+ORDER BY verified_exclusion_diff DESC
+
+SELECT hapar_id, 
+owner_land_activity, 
+user_land_activity
+FROM joined 
+WHERE owner_land_activity <> user_land_activity
+
+
+--TODO      compare owner_land_parcel_area and user_land_parcel_area
+--! add year you dufus
+SELECT hapar_id,
+       sum_owner,
+       sum_user,
+       CASE
+           WHEN sum_owner > sum_user THEN sum_owner - sum_user
+           WHEN sum_user > sum_owner THEN sum_user - sum_owner
+       END AS diff
+FROM
+    (SELECT hapar_id,
+            sum(owner_land_parcel_area) AS sum_owner,
+            sum(user_land_parcel_area) AS sum_user
+     FROM joined
+     GROUP BY hapar_id) foo
+WHERE sum_owner <> sum_user
+ORDER BY diff DESC
+--TODO      compare owner_bps_eligible_area and user_bps_eligible_area
+
 SELECT *
 FROM
     (SELECT mlc_hahol_id,

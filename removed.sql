@@ -1855,3 +1855,11 @@ SELECT *
 FROM joined
 WHERE owner_land_parcel_area <> user_land_parcel_area
 ORDER BY YEAR, hapar_id
+
+--! delete from leftover where hapar_id IN joined and land_use = 'EXCL' because these data are automatically generated and no join
+SELECT *
+FROM temp_permanent 
+WHERE land_use = 'EXCL' AND 
+    CONCAT(hapar_id, YEAR) IN 
+    (SELECT DISTINCT CONCAT(hapar_id, YEAR) 
+    FROM joined)
