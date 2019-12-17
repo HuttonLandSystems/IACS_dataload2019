@@ -33,7 +33,7 @@
             delete from original table where join above 
         third join on hapar_id, year, land_use_area 
             delete from original table where join above
-        fourd join on hapar_id, year 
+        fourth join on hapar_id, year 
             delete from original table where join above
 
 7. Clean up
@@ -309,14 +309,14 @@ FROM temp_permanent
 WHERE (land_parcel_area IS NULL
        AND land_use_area = 0)
     OR (land_parcel_area = 0
-        AND land_use_area =0); -- removes 19 rows
+        AND land_use_area =0); -- deletes 19 rows
 
 DELETE
 FROM temp_seasonal
 WHERE (land_parcel_area IS NULL
        AND land_use_area = 0)
     OR (land_parcel_area = 0
-        AND land_use_area =0); -- removes 1 rows
+        AND land_use_area =0); -- deletes 1 rows
 
 --*Step 3. Fix land_use_area IS NULL or 0 
 --copy land_parcel_area for single claims where land_parcel_area = bps_eligible_area
@@ -449,11 +449,11 @@ WHERE bps_claimed_area <> land_use_area
 --delete remaining NULL land_use_area
 DELETE FROM 
 temp_permanent 
-WHERE land_use_area IS NULL; --updates 349 rows 
+WHERE land_use_area IS NULL; --deletes 349 rows 
 
 DELETE FROM 
 temp_seasonal
-WHERE land_use_area IS NULL; --updates 1,168 rows
+WHERE land_use_area IS NULL; --deletes 1,168 rows
 
 --*STEP 4. Find renter records in wrong tables 
 --finds multiple businesses claiming on same land in same table and marks them as either owner/renter
@@ -509,7 +509,7 @@ WHERE sum_bps <> 0
     AND t.habus_id = a.habus_id
     AND t.hahol_id = a.hahol_id
     AND t.hapar_id = a.hapar_id
-    AND t.year = a.year; --updates 42 rows
+    AND t.year = a.year; --updates 49 rows
 
 WITH mult_busses AS
     (SELECT *
@@ -566,7 +566,7 @@ WHERE sum_bps = 0
     AND t.habus_id = a.habus_id
     AND t.hahol_id = a.hahol_id
     AND t.hapar_id = a.hapar_id
-    AND t.year = a.year; --updates 1,126 rows
+    AND t.year = a.year; --updates 1,134 rows
 
 --moves marked records to respective tables
 INSERT INTO temp_permanent 
@@ -574,14 +574,14 @@ SELECT *
 FROM temp_seasonal 
 WHERE claim_id_s LIKE '%P%';
 DELETE FROM temp_seasonal 
-WHERE claim_id_s LIKE '%P%'; --moves 1,126 rows
+WHERE claim_id_s LIKE '%P%'; --moves 1,134 rows
 
 INSERT INTO temp_seasonal 
 SELECT * 
 FROM temp_permanent 
 WHERE claim_id_p LIKE '%S%';
 DELETE FROM temp_permanent 
-WHERE claim_id_p LIKE '%S%'; -- moves 42 rows
+WHERE claim_id_p LIKE '%S%'; -- moves 49 rows
 
 --finds swapped owner/renters (owners in seasonal table and renters in permanent table that join on hapar_id, year, land_use, land_use_area) 
 WITH find_switches AS
@@ -620,7 +620,7 @@ JOIN temp_permanent AS b USING (hapar_id,
                                 year)
 WHERE t.hapar_id = a.hapar_id
     AND t.land_leased_out = 'N'
-    AND t.year = a.year; --updates 4,927 rows
+    AND t.year = a.year; --updates 4,929 rows
 
 WITH find_switches AS
     (SELECT hapar_id,
@@ -657,7 +657,7 @@ FROM find_switches AS a
 JOIN temp_seasonal AS b USING (hapar_id,
                                year)
 WHERE t.hapar_id = a.hapar_id
-    AND t.year = a.year; -- updates 4,921 rows  
+    AND t.year = a.year; -- updates 4,924 rows  
 
 --moves marked records to respective tables
 INSERT INTO temp_permanent 
@@ -665,14 +665,14 @@ SELECT *
 FROM temp_seasonal 
 WHERE claim_id_s LIKE '%P%';
 DELETE FROM temp_seasonal 
-WHERE claim_id_s LIKE '%P%'; --moves 4,921 rows
+WHERE claim_id_s LIKE '%P%'; --moves 4,924 rows
 
 INSERT INTO temp_seasonal 
 SELECT * 
 FROM temp_permanent 
 WHERE claim_id_p LIKE '%S%';
 DELETE FROM temp_permanent 
-WHERE claim_id_p LIKE '%S%'; -- moves 4,927 rows 
+WHERE claim_id_p LIKE '%S%'; -- moves 4,929 rows 
 
 --*STEP 5. Combine mutually exclusive
 --move mutually exclusive hapar_ids to separate table 
@@ -712,7 +712,7 @@ WHERE hapar_id NOT IN
          FROM temp_seasonal); 
 DELETE
 FROM temp_permanent AS t USING combine
-WHERE t.hapar_id = combine.hapar_id; --moves 1,802,434 rows
+WHERE t.hapar_id = combine.hapar_id; --moves 1,802,432 rows
 
 INSERT INTO combine 
 SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
@@ -750,7 +750,7 @@ WHERE hapar_id NOT IN
          FROM temp_permanent); 
 DELETE
 FROM temp_seasonal AS t USING combine
-WHERE t.hapar_id = combine.hapar_id; --move 93,759 rows
+WHERE t.hapar_id = combine.hapar_id; --move 93,752 rows
 
 --*Step 6. Join
 --first join on hapar_id, year, land_use, land_use_area
@@ -797,7 +797,7 @@ FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
                                land_use,
-                               land_use_area); --38,615 rows
+                               land_use_area); --38,629 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -806,7 +806,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM joined)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 38,326 rows 
+WHERE t.claim_id_p = a.claim_id_p; -- 38,341 rows 
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
@@ -814,7 +814,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM joined)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --38,221 rows 
+WHERE t.claim_id_s = a.claim_id_s; --38,234 rows 
 
 --second join on hapar_id, year, land_use 
 INSERT INTO joined 
@@ -859,7 +859,7 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
-                               land_use); --12,270 rows
+                               land_use); --12,266 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -868,7 +868,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM joined)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 12,062 rows 
+WHERE t.claim_id_p = a.claim_id_p; -- 12,056 rows 
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
@@ -876,7 +876,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM joined)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --12,072 rows 
+WHERE t.claim_id_s = a.claim_id_s; --12,068 rows 
 
 --third join on hapar_id, year, land_use_area
 INSERT INTO joined 
@@ -921,7 +921,7 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
-                               land_use_area); --3,397 rows
+                               land_use_area); --3,401 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -930,7 +930,7 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM joined)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 3,394 rows
+WHERE t.claim_id_p = a.claim_id_p; -- 3,398 rows
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
@@ -938,9 +938,9 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
 FROM joined)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --3,396 rows 
+WHERE t.claim_id_s = a.claim_id_s; --3,400 rows 
 
---fourth join on hapar_id, year (but not on EXCL)
+--fourth join on hapar_id, year (but not on EXCL land_uses and only on p.land_leased_out = 'Y')
 INSERT INTO joined 
 SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        s.mlc_hahol_id AS user_mlc_hahol_id,
@@ -988,7 +988,8 @@ WHERE p.land_use NOT IN
          FROM excl)
     AND s.land_use NOT IN
         (SELECT land_use
-         FROM excl); --2,229 rows
+         FROM excl)
+    AND p.land_leased_out = 'Y'; --1,341 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -1117,8 +1118,8 @@ WHERE land_leased_out = 'Y'
     AND user_bps_claimed_area = 0; --updates 378 records
 
 --*Step 8. Combine ALL rows into final table
-DROP TABLE IF EXISTS last_step;
-CREATE TEMP TABLE last_step AS
+DROP TABLE IF EXISTS final;
+CREATE TEMP TABLE final AS
 SELECT owner_mlc_hahol_id,
        user_mlc_hahol_id,
        owner_habus_id,
@@ -1200,7 +1201,7 @@ WHERE (owner_application_status LIKE '%Action%'
     AND owner_application_status <> user_application_status; -- updates 1,048 rows
 
 -- move joined data into last table
-INSERT INTO last_step 
+INSERT INTO final 
 SELECT owner_mlc_hahol_id,
        user_mlc_hahol_id,
        owner_habus_id,
@@ -1212,19 +1213,19 @@ SELECT owner_mlc_hahol_id,
            WHEN owner_land_parcel_area > user_land_parcel_area THEN owner_land_parcel_area
            WHEN user_land_parcel_area > owner_land_parcel_area THEN user_land_parcel_area
            ELSE owner_land_parcel_area
-       END AS land_parcel_area, --changes 321 rows with no greater than 5.77 area change
+       END AS land_parcel_area, --changes 321 rows with no greater than 5.77 ha change
        CASE 
             WHEN owner_bps_eligible_area > user_bps_eligible_area THEN owner_bps_eligible_area 
             WHEN user_bps_eligible_area > owner_bps_eligible_area THEN user_bps_eligible_area
             ELSE owner_bps_eligible_area
-        END AS bps_eligible_area, --changes 398 rows with no greater than 273.3 area change
+        END AS bps_eligible_area, --changes 398 rows with no greater than 273.3 ha change
        owner_bps_claimed_area,
        user_bps_claimed_area,
        CASE 
             WHEN owner_verified_exclusion > user_verified_exclusion THEN owner_verified_exclusion
             WHEN user_verified_exclusion > owner_verified_exclusion THEN user_verified_exclusion
             ELSE owner_verified_exclusion
-        END AS verified_exclusion, --changes 3,810 rows with no greater 4,208.76 area change
+        END AS verified_exclusion, --changes 3,810 rows with no greater 4,208.76 ha change
        owner_land_use_area,
        user_land_use_area,
        owner_land_use,
@@ -1250,13 +1251,13 @@ SELECT owner_mlc_hahol_id,
 FROM joined; -- moves 56,525 rows 
 
 --infer NON-SAF renter where LLO yes 
-UPDATE last_step 
+UPDATE final 
 SET user_land_use = 'NON_SAF',
 change_note = CONCAT(change_note, 'infer non-SAF renter; ')
 WHERE user_habus_id IS NULL AND land_leased_out = 'Y'; --updates 7,589 rows
 
 --infer NON-SAF owner for mutually exclusive users
-UPDATE last_step 
+UPDATE final 
 SET owner_land_use = 'NON_SAF',
 change_note = CONCAT(change_note, 'infer non-SAF owner; ')
 WHERE owner_habus_id IS NULL; --updates 114,951 rows
