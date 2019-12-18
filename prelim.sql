@@ -145,7 +145,7 @@ SELECT mlc_hahol_id,
        claim_id_p,
        YEAR
 FROM subq
-WHERE row_num < 2 -- removes 37,236 rows
+WHERE row_num < 2 -- removes 55,250 rows
     AND hapar_id IS NOT NULL -- removes 609 rows
     AND land_use <> '' -- removes 1,761 rows
     AND year <> 2019 -- removes 681,711 ROWS
@@ -236,7 +236,7 @@ SELECT mlc_hahol_id,
        claim_id_s,
        YEAR
 FROM subq
-WHERE row_num < 2 -- removes 2,957 rows
+WHERE row_num < 2 -- removes 4,362 rows
     AND hapar_id IS NOT NULL -- removes 35 rows
     AND land_use <> '' -- removes 707 rows
     AND year <> 2019 -- removes 30,403 rows
