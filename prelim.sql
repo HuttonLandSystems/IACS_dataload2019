@@ -39,8 +39,18 @@
 7. Clean up
     move leftover mutually exclusive ones to diff tables 
     find owners based on LLO flag and change them from user to owner from mutually exclusive table
+    Assumes land_parcel_area = owner_land_parcel when owner > user
+    Assumes land_parcel_area = user_land_parcel when user > owner 
+    Assumes bps_eligible_area = owner_bps_eligible_area when owner > user 
+    Assumes bps_eligible_area = user_bps_eligible_area when user > owner 
+    Assumes verified_exclusion = owner_verified_exclusion when owner > user
+    Assumes verified_exclusion = user_verified_exclusion when user > owner
+    Assumes user_land_activity is more correct when no match
+    Assumes if either owner or renter has application_status = ‘under action/assessment’ then it is  
 
 8. Combine ALL into final table
+    Infer NON-SAF renter where LLO yes 
+    Infer NON-SAF owner for mutually exclusive users 
 
 */
 DROP TABLE IF EXISTS excl;
@@ -1077,7 +1087,7 @@ FROM temp_seasonal; --last 21,577 rows
 DROP TABLE temp_permanent; 
 DROP TABLE temp_seasonal;
 
---find owners based on LLO flag  and bps_claimed_area and changes them from user to owner from mutually exclusive table
+--find owners based on LLO flag and bps_claimed_area and changes them from user to owner from mutually exclusive table
 UPDATE combine
 SET owner_mlc_hahol_id = user_mlc_hahol_id,
     user_mlc_hahol_id = NULL,
