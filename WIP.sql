@@ -1,3 +1,52 @@
+DELETE FROM combine 
+WHERE 
+SELECT owner_mlc_hahol_id,
+	user_mlc_hahol_id, 
+	owner_habus_id, 
+	user_habus_id, 
+	owner_hahol_id, 
+	user_hahol_id, 
+	hapar_id, 
+	owner_land_parcel_area,
+	user_land_parcel_area, 
+	owner_bps_eligible_area,
+	user_bps_eligible_area, 
+	owner_bps_claimed_area, 
+	user_bps_claimed_area,
+	owner_verified_exclusion,
+	user_verified_exclusion,
+	owner_land_use_area, 
+	user_land_use_area, 
+	owner_land_use, 
+	user_land_use, 
+	owner_land_activity,
+	user_land_activity, 
+	owner_application_status,
+	user_application_status,
+	land_leased_out, 
+	owner_lfass_flag,
+	user_lfass_flag,
+	YEAR, 
+	row_number() OVER (PARTITION BY claim_id)
+FROM joined
+
+
+SELECT *
+FROM FINAL
+WHERE owner_land_use IN
+        (SELECT land_use
+         FROM excl)
+    AND user_land_use IN
+        (SELECT land_use
+         FROM excl)
+    AND user_land_use_area <> 0
+    AND user_land_use <> 'EXCL'
+    -- especially hapar_id = 369777 -- this one has matching hahol id
+    -- with 369777 owner PGRS needs to be subdivided into PGRS and RGR
+    -- the problem happens when I do second join and then delete all joined from original. I need to be able to join something again but how
+    -- SO THE TRICK IS NOT TO DELETE BUT DO JOINS ANYWAY AND DELETE DUPLICATES AFTERWARD
+
+
 --! Do everything by FID and not claim
 --! FID level analysis, no claim level
 --TODO      compare owner_land_parcel_area and user_land_parcel_area

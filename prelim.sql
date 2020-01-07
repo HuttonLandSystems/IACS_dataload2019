@@ -1223,19 +1223,19 @@ SELECT owner_mlc_hahol_id,
            WHEN owner_land_parcel_area > user_land_parcel_area THEN owner_land_parcel_area
            WHEN user_land_parcel_area > owner_land_parcel_area THEN user_land_parcel_area
            ELSE owner_land_parcel_area
-       END AS land_parcel_area, --changes 321 rows with no greater than 5.77 ha change
+       END AS land_parcel_area, --changes 321 rows with than 5.77 ha change
        CASE 
             WHEN owner_bps_eligible_area > user_bps_eligible_area THEN owner_bps_eligible_area 
             WHEN user_bps_eligible_area > owner_bps_eligible_area THEN user_bps_eligible_area
             ELSE owner_bps_eligible_area
-        END AS bps_eligible_area, --changes 398 rows with no greater than 273.3 ha change
+        END AS bps_eligible_area, --changes 398 rows with than 273.3 ha change
        owner_bps_claimed_area,
        user_bps_claimed_area,
        CASE 
             WHEN owner_verified_exclusion > user_verified_exclusion THEN owner_verified_exclusion
             WHEN user_verified_exclusion > owner_verified_exclusion THEN user_verified_exclusion
             ELSE owner_verified_exclusion
-        END AS verified_exclusion, --changes 3,810 rows with no greater 4,208.76 ha change
+        END AS verified_exclusion, --changes 3,810 rows with 4,208.76 ha change
        owner_land_use_area,
        user_land_use_area,
        owner_land_use,
