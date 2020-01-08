@@ -1,36 +1,84 @@
-DELETE FROM combine 
-WHERE 
-SELECT owner_mlc_hahol_id,
-	user_mlc_hahol_id, 
-	owner_habus_id, 
-	user_habus_id, 
-	owner_hahol_id, 
-	user_hahol_id, 
-	hapar_id, 
-	owner_land_parcel_area,
-	user_land_parcel_area, 
-	owner_bps_eligible_area,
-	user_bps_eligible_area, 
-	owner_bps_claimed_area, 
-	user_bps_claimed_area,
-	owner_verified_exclusion,
-	user_verified_exclusion,
-	owner_land_use_area, 
-	user_land_use_area, 
-	owner_land_use, 
-	user_land_use, 
-	owner_land_activity,
-	user_land_activity, 
-	owner_application_status,
-	user_application_status,
-	land_leased_out, 
-	owner_lfass_flag,
-	user_lfass_flag,
-	YEAR, 
-	row_number() OVER (PARTITION BY claim_id)
-FROM joined
+--TODO   should I make all excl land_use match verified exclusion unless where separated? (about 7k in perm)
+--TODO      multiple businesses for same hapar, year
+SELECT * 
+FROM temp_permanent
+WHERE hapar_id = 40016
+ORDER BY year
+
+--! needs troubleshooting because returns 0 results
+WITH cte AS (
+SELECT habus_id, hapar_id, YEAR
+FROM temp_permanent 
+GROUP BY habus_id, hapar_id, YEAR)
+SELECT * 
+FROM (
+SELECT habus_id, hapar_id, YEAR, ROW_NUMBER() OVER (PARTITION BY habus_id, hapar_id, year)
+FROM cte) foo
+WHERE ROW_NUMBER > 1
+
+--! need to combine same land_use year hapar_id -- no i dont because they're separated for a reason !
+WITH same_lu AS (
+    SELECT *
+    FROM
+        ( SELECT mlc_hahol_id,
+                habus_id,
+                hahol_id,
+                hapar_id,
+                land_parcel_area,
+                bps_eligible_area,
+                bps_claimed_area,
+                verified_exclusion,
+                land_use_area,
+                land_use,
+                land_activity,
+                application_status,
+                land_leased_out,
+                lfass_flag,
+                is_perm_flag,
+                claim_id_p,
+                year,
+                change_note,
+                ROW_NUMBER() OVER (PARTITION BY hapar_id,
+                                                land_use,
+                                                year, 
+                                                land_leased_out)
+        FROM temp_permanent ) foo
+    WHERE ROW_NUMBER > 1
+)
+
+-- run all the way up to join 
+-- check hapars 1135,1144,1146,1725,1728
+    SELECT mlc_hahol_id, 
+           habus_id, 
+           hahol_id, 
+           hapar_id, 
+           land_parcel_area, 
+           bps_eligible_area,
+           bps_claimed_area, 
+           verified_exclusion, 
+           land_use_area, 
+           land_use, 
+           land_activity, 
+           application_status, 
+           land_leased_out, 
+           lfass_flag, 
+           is_perm_flag, 
+           claim_id_p, 
+           year, 
+           change_note, 
+           ROW_NUMBER() OVER (PARTITION BY hapar_id, land_use, year)
+    FROM temp_permanent
+    WHERE hapar_id > 1100
+ORDER BY hapar_id, year
 
 
+
+SELECT * 
+FROM temp_seasonal
+WHERE verified_exclusion <> land_use_area AND land_use IN (SELECT land_use FROM excl)
+ORDER BY hapar_id, year
+
+--! Ask Doug
 SELECT *
 FROM FINAL
 WHERE owner_land_use IN
@@ -49,7 +97,6 @@ WHERE owner_land_use IN
 
 --! Do everything by FID and not claim
 --! FID level analysis, no claim level
---TODO      compare owner_land_parcel_area and user_land_parcel_area
 --TODO      compare owner_bps_eligible_area and user_bps_eligible_area
 
 --TODO check claimed_area vs land_parcel-area
@@ -86,25 +133,43 @@ user_land_activity
 FROM joined 
 WHERE owner_land_activity <> user_land_activity
 
-
---TODO      compare owner_land_parcel_area and user_land_parcel_area
---! add year you dufus
+--TODO   last checks      compare owner_land_parcel_area and user_land_parcel_area
 SELECT hapar_id,
        sum_owner,
        sum_user,
        CASE
            WHEN sum_owner > sum_user THEN sum_owner - sum_user
            WHEN sum_user > sum_owner THEN sum_user - sum_owner
-       END AS diff
+       END AS diff,
+       year
 FROM
     (SELECT hapar_id,
+            year,
             sum(owner_land_parcel_area) AS sum_owner,
             sum(user_land_parcel_area) AS sum_user
      FROM joined
-     GROUP BY hapar_id) foo
+     GROUP BY hapar_id, year) foo
 WHERE sum_owner <> sum_user
 ORDER BY diff DESC
---TODO      compare owner_bps_eligible_area and user_bps_eligible_area
+
+--TODO   last checks      compare owner_bps_eligible_area and user_bps_eligible_area
+SELECT hapar_id,
+       sum_owner,
+       sum_user,
+       CASE
+           WHEN sum_owner > sum_user THEN sum_owner - sum_user
+           WHEN sum_user > sum_owner THEN sum_user - sum_owner
+       END AS diff,
+       year
+FROM
+    (SELECT hapar_id,
+            year,
+            sum(owner_bps_eligible_area) AS sum_owner,
+            sum(user_bps_eligible_area) AS sum_user
+     FROM joined
+     GROUP BY hapar_id, year) foo
+WHERE sum_owner <> sum_user
+ORDER BY diff DESC
 
 SELECT *
 FROM
