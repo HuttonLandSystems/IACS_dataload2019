@@ -684,85 +684,7 @@ WHERE claim_id_p LIKE '%S%';
 DELETE FROM temp_permanent 
 WHERE claim_id_p LIKE '%S%'; -- moves 4,929 rows 
 
---*STEP 5. Combine mutually exclusive
---move mutually exclusive hapar_ids to separate table 
-DROP TABLE IF EXISTS combine; 
-SELECT mlc_hahol_id AS owner_mlc_hahol_id,
-       NULL :: BIGINT AS user_mlc_hahol_id,
-       habus_id AS owner_habus_id,
-       NULL :: BIGINT AS user_habus_id,
-       hahol_id AS owner_hahol_id,
-       NULL :: BIGINT AS user_hahol_id,
-       hapar_id,
-       land_parcel_area AS owner_land_parcel_area,
-       NULL :: BIGINT AS user_land_parcel_area,
-       bps_eligible_area AS owner_bps_eligible_area,
-       NULL :: BIGINT AS user_bps_eligible_area,
-       bps_claimed_area AS owner_bps_claimed_area,
-       NULL :: BIGINT AS user_bps_claimed_area,
-       verified_exclusion AS owner_verified_exclusion,
-       NULL :: BIGINT AS user_verified_exclusion,
-       land_use_area AS owner_land_use_area,
-       NULL :: BIGINT AS user_land_use_area,
-       land_use AS owner_land_use,
-       NULL :: VARCHAR AS user_land_use,
-       land_activity AS owner_land_activity,
-       NULL :: VARCHAR AS user_land_activity,
-       application_status AS owner_application_status,
-       NULL :: VARCHAR AS user_application_status,
-       land_leased_out,
-       lfass_flag AS owner_lfass_flag,
-       NULL :: VARCHAR AS user_lfass_flag,
-       claim_id_p AS claim_id,
-       year,
-       change_note INTO TEMP TABLE combine
-FROM temp_permanent
-WHERE hapar_id NOT IN
-        (SELECT DISTINCT hapar_id
-         FROM temp_seasonal); 
-DELETE
-FROM temp_permanent AS t USING combine
-WHERE t.hapar_id = combine.hapar_id; --moves 1,802,432 rows
-
-INSERT INTO combine 
-SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
-       mlc_hahol_id AS user_mlc_hahol_id,
-       NULL :: BIGINT AS owner_habus_id,
-       habus_id AS user_habus_id,
-       NULL :: BIGINT AS owner_hahol_id,
-       hahol_id AS user_hahol_id,
-       hapar_id,
-       NULL :: BIGINT AS owner_land_parcel_area, 
-       land_parcel_area AS user_land_parcel_area,
-       NULL :: BIGINT AS owner_bps_eligible_area,
-       bps_eligible_area AS user_bps_eligible_area,
-       NULL :: BIGINT AS owner_bps_claimed_area,
-       bps_claimed_area AS user_bps_claimed_area,
-       NULL :: BIGINT AS owner_verified_exclusion,
-       verified_exclusion AS user_verified_exclusion,
-       NULL :: BIGINT AS owner_land_use_area,
-       land_use_area AS user_land_use_area,
-       NULL :: VARCHAR AS owner_land_use,
-       land_use AS user_land_use,
-       NULL :: VARCHAR AS owner_land_activity,
-       land_activity AS user_land_activity,
-       NULL :: VARCHAR AS owner_application_status,
-       application_status AS user_application_status,
-       land_leased_out,
-       NULL :: VARCHAR AS owner_lfass_flag,
-       lfass_flag AS user_lfass_flag,
-       claim_id_s AS claim_id,
-       year,
-       change_note
-FROM temp_seasonal 
-WHERE hapar_id NOT IN
-        (SELECT DISTINCT hapar_id
-         FROM temp_permanent); 
-DELETE
-FROM temp_seasonal AS t USING combine
-WHERE t.hapar_id = combine.hapar_id; --move 93,752 rows
-
---*Step 6. Join
+--*Step 5. Join
 --first join on hapar_id, year, land_use, land_use_area
 DROP TABLE IF EXISTS joined; 
 SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
@@ -795,36 +717,19 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        year,
        CASE
            WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note, 'first join; ')
+                AND s.change_note IS NOT NULL THEN CONCAT('1first join; ', p.change_note, s.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(s.change_note, 'first join; ')
+                AND s.change_note IS NOT NULL THEN CONCAT('1first join; ', s.change_note)
            WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN CONCAT(p.change_note, 'first join; ')
+                AND p.change_note IS NOT NULL THEN CONCAT('1first join; ', p.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN 'first join; '
+                AND s.change_note IS NULL THEN '1first join; '
        END AS change_note INTO TEMP TABLE joined
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
                                land_use,
                                land_use_area); --38,629 rows
-
---delete from original table where join above
-WITH joined_ids AS (
-SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
-       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
-FROM joined)
-DELETE 
-FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 38,341 rows 
-
-WITH joined_ids AS (
-SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
-       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
-FROM joined)
-DELETE 
-FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --38,234 rows 
 
 --second join on hapar_id, year, land_use 
 INSERT INTO joined 
@@ -858,35 +763,18 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        year,
        CASE
            WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note, 'second join; ')
+                AND s.change_note IS NOT NULL THEN CONCAT('2second join; ', p.change_note, s.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(s.change_note, 'second join; ')
+                AND s.change_note IS NOT NULL THEN CONCAT('2second join; ', s.change_note)
            WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN CONCAT(p.change_note, 'second join; ')
+                AND p.change_note IS NOT NULL THEN CONCAT('2second join; ', p.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN 'second join; '
+                AND s.change_note IS NULL THEN '2second join; '
        END AS change_note 
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
                                land_use); --12,266 rows
-
---delete from original table where join above
-WITH joined_ids AS (
-SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
-       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
-FROM joined)
-DELETE 
-FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 12,056 rows 
-
-WITH joined_ids AS (
-SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
-       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
-FROM joined)
-DELETE 
-FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --12,068 rows 
 
 --third join on hapar_id, year, land_use_area
 INSERT INTO joined 
@@ -920,35 +808,18 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        year,
        CASE
            WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note, 'third join; ')
+                AND s.change_note IS NOT NULL THEN CONCAT('3third join; ', p.change_note, s.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(s.change_note, 'third join; ')
+                AND s.change_note IS NOT NULL THEN CONCAT('3third join; ', s.change_note)
            WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN CONCAT(p.change_note, 'third join; ')
+                AND p.change_note IS NOT NULL THEN CONCAT('3third join; ', p.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN 'third join; '
+                AND s.change_note IS NULL THEN '3third join; '
        END AS change_note 
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
                                land_use_area); --3,401 rows
-
---delete from original table where join above
-WITH joined_ids AS (
-SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
-       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
-FROM joined)
-DELETE 
-FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 3,398 rows
-
-WITH joined_ids AS (
-SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
-       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
-FROM joined)
-DELETE 
-FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --3,400 rows 
 
 --fourth join on hapar_id, year (but not on EXCL land_uses and only on p.land_leased_out = 'Y')
 INSERT INTO joined 
@@ -982,13 +853,13 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        year,
        CASE
            WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(p.change_note, s.change_note, 'fourth join; ')
+                AND s.change_note IS NOT NULL THEN CONCAT('4fourth join; ', p.change_note, s.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN CONCAT(s.change_note, 'fourth join; ')
+                AND s.change_note IS NOT NULL THEN CONCAT('4fourth join; ', s.change_note)
            WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN CONCAT(p.change_note, 'fourth join; ')
+                AND p.change_note IS NOT NULL THEN CONCAT('4fourth join; ', p.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN 'fourth join; '
+                AND s.change_note IS NULL THEN '4fourth join; '
        END AS change_note
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
@@ -1018,7 +889,7 @@ DELETE
 FROM temp_seasonal AS t USING joined_ids AS a  
 WHERE t.claim_id_s = a.claim_id_s; --1,972 rows 
 
---*STEP 7. Clean up 
+--*STEP 6. Clean up 
 --move leftover mutually exclusive ones to diff tables 
 INSERT INTO combine
 SELECT mlc_hahol_id AS owner_mlc_hahol_id,
@@ -1127,7 +998,7 @@ WHERE land_leased_out = 'Y'
     AND user_land_use IS NOT NULL
     AND user_bps_claimed_area = 0; --updates 378 records
 
---*Step 8. Combine ALL rows into final table
+--*Step 7. Combine ALL rows into final table
 DROP TABLE IF EXISTS final;
 CREATE TEMP TABLE final AS
 SELECT owner_mlc_hahol_id,
