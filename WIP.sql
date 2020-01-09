@@ -4,7 +4,6 @@ SELECT *
 FROM temp_permanent
 WHERE hapar_id = 40016
 ORDER BY year
-
 --! needs troubleshooting because returns 0 results
 WITH cte AS (
 SELECT habus_id, hapar_id, YEAR
