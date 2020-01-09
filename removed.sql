@@ -1864,6 +1864,9 @@ WHERE land_use = 'EXCL' AND
     (SELECT DISTINCT CONCAT(hapar_id, YEAR) 
     FROM joined)
 
+/*           
+5. Combine mutually exclusive       
+        move mutually exclusive hapar_ids to separate table */
 --*STEP 5. Combine mutually exclusive 
 --! Do i really need to do this?
 --move mutually exclusive hapar_ids to separate table 
@@ -1994,6 +1997,12 @@ FROM joined)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
 WHERE t.claim_id_s = a.claim_id_s; --3,400 rows 
+
+/*4. Find renter records in wrong tables
+        finds multiple businesses claiming on same land in same table and marks them as either owner/renter
+        moves marked records to respective tables
+        finds swapped owner/renters (owners in seasonal table and renters in permanent table that join on hapar_id, year, land_use, land_use_area) 
+        move marked records to respective tables */
 
 --*STEP 4. Find renter records in wrong tables 
 --finds multiple businesses claiming on same land in same table and marks them as either owner/renter

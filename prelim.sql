@@ -16,16 +16,7 @@
         update NULL/0 land_use_areas with inferred values from other years whre same land_use
         --! adjust land_use_area to match bps_claimed_area -- not sure about this one
         delete remaining NULL land_use_area
-
-4. Find renter records in wrong tables
-        finds multiple businesses claiming on same land in same table and marks them as either owner/renter
-        moves marked records to respective tables
-        finds swapped owner/renters (owners in seasonal table and renters in permanent table that join on hapar_id, year, land_use, land_use_area) 
-        move marked records to respective tables
-            
-5. Combine mutually exclusive       
-        move mutually exclusive hapar_ids to separate table
-        
+   
 6. Joins 
         first join on hapar_id, year, land_use, land_use_area
             delete from original table where join above
@@ -464,8 +455,6 @@ WHERE land_use_area IS NULL; --deletes 349 rows
 DELETE FROM 
 temp_seasonal
 WHERE land_use_area IS NULL; --deletes 1,168 rows
-
-
 
 --*Step 5. Join
 --first join on hapar_id, year, land_use, land_use_area

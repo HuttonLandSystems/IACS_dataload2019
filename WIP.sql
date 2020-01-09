@@ -1,18 +1,22 @@
 --TODO   should I make all excl land_use match verified exclusion unless where separated? (about 7k in perm)
---TODO      multiple businesses for same hapar, year
+
 SELECT * 
 FROM temp_permanent
 WHERE hapar_id = 40016
 ORDER BY year
---! needs troubleshooting because returns 0 results
-WITH cte AS (
-SELECT habus_id, hapar_id, YEAR
-FROM temp_permanent 
-GROUP BY habus_id, hapar_id, YEAR)
-SELECT * 
-FROM (
-SELECT habus_id, hapar_id, YEAR, ROW_NUMBER() OVER (PARTITION BY habus_id, hapar_id, year)
-FROM cte) foo
+
+--* finds multiple businesses for same hapar, year
+SELECT *
+FROM
+    (SELECT habus_id,
+            hapar_id,
+            YEAR,
+            ROW_NUMBER() OVER (PARTITION BY hapar_id,
+                                            YEAR)
+     FROM temp_seasonal
+     GROUP BY habus_id,
+              hapar_id,
+              YEAR) foo
 WHERE ROW_NUMBER > 1
 
 --! need to combine same land_use year hapar_id -- no i dont because they're separated for a reason !
