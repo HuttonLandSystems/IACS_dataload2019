@@ -1,10 +1,47 @@
 --TODO   should I make all excl land_use match verified exclusion unless where separated? (about 7k in perm)
+--TODO   look at LFASS flag where claim = 0
+
+--* finds and sums difference in overclaims where bps_claimed_area > land_parcel_area for perm and seas table 
+SELECT sum(land_parcel_area - bps_claimed_area)
+FROM
+    (SELECT hapar_id,
+            year
+     FROM
+         (SELECT hapar_id,
+                 YEAR,
+                 sum_bps,
+                 land_parcel_area
+          FROM
+              (SELECT hapar_id,
+                      YEAR,
+                      sum(bps_claimed_area) AS sum_bps
+               FROM temp_seasonal
+               GROUP BY hapar_id,
+                        YEAR) foo
+          JOIN temp_seasonal USING (hapar_id,
+                                     YEAR)) bar
+     WHERE sum_bps > land_parcel_area
+     GROUP BY hapar_id,
+              year) foobar
+JOIN temp_seasonal USING (hapar_id,
+                           year);
+
+--* finds and sums difference in overclaims where bps_claimed_area > land_parcel_area for joined table
+SELECT sum(total_claimed_area - owner_land_parcel_area)
+FROM
+    (SELECT hapar_id,
+            YEAR,
+            owner_land_parcel_area,
+            user_land_parcel_area,
+            owner_bps_claimed_area + user_bps_claimed_area AS total_claimed_area
+     FROM joined) foo
+WHERE total_claimed_area > owner_land_parcel_area
+    OR total_claimed_area > user_land_parcel_area;
 
 SELECT * 
 FROM temp_permanent
 WHERE hapar_id = 40016
 ORDER BY year
-
 --* finds multiple businesses for same hapar, year
 SELECT *
 FROM
