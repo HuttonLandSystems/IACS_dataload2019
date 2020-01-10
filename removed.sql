@@ -2222,3 +2222,45 @@ FROM temp_permanent
 WHERE claim_id_p LIKE '%S%';
 DELETE FROM temp_permanent 
 WHERE claim_id_p LIKE '%S%'; -- moves 4,929 rows 
+
+-- deletes bad joins to allow for PGRS - RGR joins etc
+WITH dupes AS
+    (SELECT *
+     FROM
+         (SELECT owner_mlc_hahol_id,
+                 user_mlc_hahol_id,
+                 owner_habus_id,
+                 user_habus_id,
+                 owner_hahol_id,
+                 user_hahol_id,
+                 hapar_id,
+                 owner_land_parcel_area,
+                 user_land_parcel_area,
+                 owner_bps_eligible_area,
+                 user_bps_eligible_area,
+                 owner_bps_claimed_area,
+                 user_bps_claimed_area,
+                 owner_verified_exclusion,
+                 user_verified_exclusion,
+                 owner_land_use_area,
+                 user_land_use_area,
+                 owner_land_use,
+                 user_land_use,
+                 owner_land_activity,
+                 user_land_activity,
+                 owner_application_status,
+                 user_application_status,
+                 land_leased_out,
+                 owner_lfass_flag,
+                 user_lfass_flag,
+                 YEAR,
+                 change_note,
+                 claim_id,
+                 row_number() OVER (PARTITION BY claim_id
+                                    ORDER BY change_note)
+          FROM joined) foo
+     WHERE ROW_NUMBER > 1)
+DELETE
+FROM joined AS j USING dupes AS d
+WHERE j.claim_id = d.claim_id
+    AND j.change_note NOT LIKE '%1%'; -- deletes 121,281 bad joines

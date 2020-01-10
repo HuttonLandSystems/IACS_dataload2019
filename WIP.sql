@@ -26,8 +26,8 @@ FROM
 JOIN temp_seasonal USING (hapar_id,
                            year);
 
---* finds and sums difference in overclaims where bps_claimed_area > land_parcel_area for joined table
-SELECT sum(total_claimed_area - owner_land_parcel_area)
+--* finds and sums difference in SINGLE overclaims where bps_claimed_area > land_parcel_area for joined table
+SELECT hapar_id, YEAR, total_claimed_area - owner_land_parcel_area AS diff
 FROM
     (SELECT hapar_id,
             YEAR,
@@ -36,7 +36,8 @@ FROM
             owner_bps_claimed_area + user_bps_claimed_area AS total_claimed_area
      FROM joined) foo
 WHERE total_claimed_area > owner_land_parcel_area
-    OR total_claimed_area > user_land_parcel_area;
+    OR total_claimed_area > user_land_parcel_area
+    ORDER BY diff DESC;
 
 SELECT * 
 FROM temp_permanent

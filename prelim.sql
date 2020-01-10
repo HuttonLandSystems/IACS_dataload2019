@@ -65,6 +65,7 @@ VALUES ('BLU-GLS', 'Blueberries - glasshouse'),
        ('SCE', 'Scree'), 
        ('STRB-GLS', 'Strawberries - glasshouse'), 
        ('TOM-GLS', 'Tomatoes - glasshouse'), 
+       ('TREE', 'Trees'),
        ('TREES', 'Trees'), 
        ('WAT', 'Water');
 
@@ -435,14 +436,14 @@ WHERE s.hapar_id = sub2.hapar_id
 --adjust land_use_area to match bps_claimed_area
 UPDATE temp_permanent
 SET land_use_area = bps_claimed_area,
-    change_note = CONCAT(change_note, 'adjust land_use_area to match bps_claimed_area; ')
+    change_note = CONCAT(change_note, 'adjust owner land_use_area to match bps_claimed_area; ')
 WHERE bps_claimed_area <> land_use_area
     AND bps_claimed_area <> 0
     AND bps_claimed_area < land_parcel_area; -- updates 183,590 rows
 
 UPDATE temp_seasonal
 SET land_use_area = bps_claimed_area,
-    change_note = CONCAT(change_note, 'adjust land_use_area to match bps_claimed_area; ')
+    change_note = CONCAT(change_note, 'adjust user land_use_area to match bps_claimed_area; ')
 WHERE bps_claimed_area <> land_use_area
     AND bps_claimed_area <> 0
     AND bps_claimed_area < land_parcel_area;; -- updates 21,194 rows
@@ -482,7 +483,8 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        s.land_activity AS user_land_activity,
        p.application_status AS owner_application_status,
        s.application_status AS user_application_status,
-       'Y' AS land_leased_out,
+       p.land_leased_out AS owner_land_leased_out,
+       s.land_leased_out AS user_land_leased_out, 
        p.lfass_flag AS owner_lfass_flag,
        s.lfass_flag AS user_lfass_flag,
        CONCAT(claim_id_p, ', ', claim_id_s) AS claim_id,
@@ -501,10 +503,10 @@ FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
                                land_use,
-                               land_use_area); --38,629 rows
+                               land_use_area); --37,961 rows
 
 --second join on hapar_id, year, land_use 
-INSERT INTO joined 
+WITH all_joined AS (
 SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        s.mlc_hahol_id AS user_mlc_hahol_id,
        p.habus_id AS owner_habus_id,
@@ -528,7 +530,8 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        s.land_activity AS user_land_activity,
        p.application_status AS owner_application_status,
        s.application_status AS user_application_status,
-       p.land_leased_out,
+       p.land_leased_out AS owner_land_leased_out,
+       s.land_leased_out AS user_land_leased_out, 
        p.lfass_flag AS owner_lfass_flag,
        s.lfass_flag AS user_lfass_flag,
        CONCAT(claim_id_p, ', ', claim_id_s) AS claim_id,
@@ -546,10 +549,14 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
-                               land_use); --12,266 rows
+                               land_use))
+INSERT INTO joined 
+SELECT * 
+FROM all_joined 
+WHERE claim_id NOT IN (SELECT claim_id FROM joined); --12,402 rows
 
 --third join on hapar_id, year, land_use_area
-INSERT INTO joined 
+WITH all_joined AS (
 SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        s.mlc_hahol_id AS user_mlc_hahol_id,
        p.habus_id AS owner_habus_id,
@@ -573,7 +580,8 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        s.land_activity AS user_land_activity,
        p.application_status AS owner_application_status,
        s.application_status AS user_application_status,
-       p.land_leased_out,
+       p.land_leased_out AS owner_land_leased_out,
+       s.land_leased_out AS user_land_leased_out, 
        p.lfass_flag AS owner_lfass_flag,
        s.lfass_flag AS user_lfass_flag,
        CONCAT(claim_id_p, ', ', claim_id_s) AS claim_id,
@@ -591,119 +599,135 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
-                               land_use_area); --3,401 rows
-
---fourth join on hapar_id, year (but not on EXCL land_uses and only on p.land_leased_out = 'Y')
+                               land_use_area))
 INSERT INTO joined 
-SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
-       s.mlc_hahol_id AS user_mlc_hahol_id,
-       p.habus_id AS owner_habus_id,
-       s.habus_id AS user_habus_id,
-       p.hahol_id AS owner_hahol_id,
-       s.hahol_id AS user_hahol_id,
-       hapar_id,
-       p.land_parcel_area AS owner_land_parcel_area,
-       s.land_parcel_area AS user_land_parcel_area,
-       p.bps_eligible_area AS owner_bps_eligible_area,
-       s.bps_eligible_area AS user_bps_eligible_area,
-       p.bps_claimed_area AS owner_bps_claimed_area,
-       s.bps_claimed_area AS user_bps_claimed_area,
-       p.verified_exclusion AS owner_verified_exclusion,
-       s.verified_exclusion AS user_verified_exclusion,
-       p.land_use_area AS owner_land_use_area,
-       s.land_use_area AS user_land_use_area,
-       p.land_use AS owner_land_use,
-       s.land_use AS user_land_use,
-       p.land_activity AS owner_land_activity,
-       s.land_activity AS user_land_activity,
-       p.application_status AS owner_application_status,
-       s.application_status AS user_application_status,
-       p.land_leased_out,
-       p.lfass_flag AS owner_lfass_flag,
-       s.lfass_flag AS user_lfass_flag,
-       CONCAT(claim_id_p, ', ', claim_id_s) AS claim_id,
-       year,
-       CASE
-           WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT('4fourth join; ', p.change_note, s.change_note)
-           WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN CONCAT('4fourth join; ', s.change_note)
-           WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN CONCAT('4fourth join; ', p.change_note)
-           WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN '4fourth join; '
-       END AS change_note
-FROM temp_permanent AS p
-JOIN temp_seasonal AS s USING (hapar_id,
-                               year)
-WHERE p.land_use NOT IN
-        (SELECT land_use
-         FROM excl)
-    AND s.land_use NOT IN
-        (SELECT land_use
-         FROM excl)
-    AND p.land_leased_out = 'Y'; --1,341 rows
+SELECT * 
+FROM all_joined 
+WHERE claim_id NOT IN (SELECT claim_id FROM joined); --3,445 rows
 
---! BETA ----------------------------------------
-WITH dupes AS
+--fourth join on hapar_id, year 
+WITH all_joined AS
+    (SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
+            s.mlc_hahol_id AS user_mlc_hahol_id,
+            p.habus_id AS owner_habus_id,
+            s.habus_id AS user_habus_id,
+            p.hahol_id AS owner_hahol_id,
+            s.hahol_id AS user_hahol_id,
+            hapar_id,
+            p.land_parcel_area AS owner_land_parcel_area,
+            s.land_parcel_area AS user_land_parcel_area,
+            p.bps_eligible_area AS owner_bps_eligible_area,
+            s.bps_eligible_area AS user_bps_eligible_area,
+            p.bps_claimed_area AS owner_bps_claimed_area,
+            s.bps_claimed_area AS user_bps_claimed_area,
+            p.verified_exclusion AS owner_verified_exclusion,
+            s.verified_exclusion AS user_verified_exclusion,
+            p.land_use_area AS owner_land_use_area,
+            s.land_use_area AS user_land_use_area,
+            p.land_use AS owner_land_use,
+            s.land_use AS user_land_use,
+            p.land_activity AS owner_land_activity,
+            s.land_activity AS user_land_activity,
+            p.application_status AS owner_application_status,
+            s.application_status AS user_application_status,
+            p.land_leased_out AS owner_land_leased_out,
+            s.land_leased_out AS user_land_leased_out,
+            p.lfass_flag AS owner_lfass_flag,
+            s.lfass_flag AS user_lfass_flag,
+            CONCAT(claim_id_p, ', ', claim_id_s) AS claim_id,
+            year,
+            CASE
+                WHEN p.change_note IS NOT NULL
+                     AND s.change_note IS NOT NULL THEN CONCAT('4fourth join; ', p.change_note, s.change_note)
+                WHEN p.change_note IS NULL
+                     AND s.change_note IS NOT NULL THEN CONCAT('4fourth join; ', s.change_note)
+                WHEN s.change_note IS NULL
+                     AND p.change_note IS NOT NULL THEN CONCAT('4fourth join; ', p.change_note)
+                WHEN p.change_note IS NULL
+                     AND s.change_note IS NULL THEN '4fourth join; '
+            END AS change_note
+     FROM temp_permanent AS p
+     JOIN temp_seasonal AS s USING (hapar_id,
+                                    year))
+INSERT INTO joined
+SELECT *
+FROM all_joined
+WHERE claim_id NOT IN
+        (SELECT claim_id
+         FROM joined); --39,002 rows
+
+-- deletes bad joins where good joins (i.e. 1st or 2nd joins) exist
+WITH first_join AS
+    (SELECT SPLIT_PART(claim_id, ',', 1) AS claim_id_p,
+            SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+     FROM joined
+     WHERE change_note LIKE '%1%'
+         OR change_note LIKE '%2%')
+DELETE
+FROM joined
+WHERE change_note LIKE '%4%'
+    AND (SPLIT_PART(joined.claim_id, ', ',1) IN
+             (SELECT DISTINCT claim_id_p
+              FROM first_join)
+         OR SPLIT_PART(joined.claim_id, ', ', 2) IN
+             (SELECT DISTINCT claim_id_s
+              FROM first_join)); -- deletes 36,128 rows
+
+-- deletes problems joins based on specific criteria
+DELETE
+FROM joined
+WHERE change_note LIKE '%4%'
+    AND ((owner_land_use IN
+              (SELECT land_use
+               FROM excl)
+          AND user_bps_claimed_area <> 0)
+         OR (user_land_use IN
+                 (SELECT land_use
+                  FROM excl)
+             AND owner_bps_claimed_area <> 0)
+         OR (user_bps_claimed_area = 0
+             AND owner_land_leased_out = 'N')
+         OR (owner_land_use NOT IN
+                 (SELECT land_use
+                  FROM excl)
+             AND user_land_use IN
+                 (SELECT land_use
+                  FROM excl))); -- deletes 1,218 rows
+        --! what about user_land_leased_out = Y?
+
+-- deletes many to one (user to owner) claims
+WITH sclaims AS
     (SELECT *
      FROM
-         (SELECT owner_mlc_hahol_id,
-                 user_mlc_hahol_id,
-                 owner_habus_id,
-                 user_habus_id,
-                 owner_hahol_id,
-                 user_hahol_id,
-                 hapar_id,
-                 owner_land_parcel_area,
-                 user_land_parcel_area,
-                 owner_bps_eligible_area,
-                 user_bps_eligible_area,
-                 owner_bps_claimed_area,
-                 user_bps_claimed_area,
-                 owner_verified_exclusion,
-                 user_verified_exclusion,
-                 owner_land_use_area,
-                 user_land_use_area,
-                 owner_land_use,
-                 user_land_use,
-                 owner_land_activity,
-                 user_land_activity,
-                 owner_application_status,
-                 user_application_status,
-                 land_leased_out,
-                 owner_lfass_flag,
-                 user_lfass_flag,
-                 YEAR,
-                 change_note,
-                 claim_id,
-                 row_number() OVER (PARTITION BY claim_id
-                                    ORDER BY change_note)
-          FROM joined) foo
-     WHERE ROW_NUMBER > 1)
+         (SELECT claim_id_s,
+                 COUNT(*)
+          FROM
+              (SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s,
+                      LEFT(change_note, 1) AS join_no
+               FROM joined) foo
+          GROUP BY claim_id_s) bar
+     WHERE COUNT > 1) 
 DELETE
-FROM joined AS j USING dupes AS d
-WHERE j.claim_id = d.claim_id
-    AND j.change_note NOT LIKE '%1%'; -- deletes 121,281 bad joines
---! BETA -------------------------------------------    
-
+FROM joined
+WHERE SPLIT_PART(claim_id, ', ', 2) IN
+        (SELECT claim_id_s
+         FROM sclaims)
+    AND change_note LIKE '%4%'; -- deletes 153 rows
 --! problems still exist: 
---! should there be joins with owner_bps_claimed_area <> 0? 
+--! should there be joins with user_bps_claimed_area <> 0? 
 --! What about where both owner_bps_claimed_area AND user_bps_claimed_area <> 0?
 
 
 --delete from original table where join above
 WITH joined_ids AS (
-SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
-       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p
 FROM joined)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
 WHERE t.claim_id_p = a.claim_id_p; -- 1,807 rows 
 
 WITH joined_ids AS (
-SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
-       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
 FROM joined)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
@@ -854,7 +878,7 @@ SELECT owner_mlc_hahol_id,
            WHEN owner_application_status IS NULL THEN user_application_status
            WHEN user_application_status IS NULL THEN owner_application_status
        END AS application_status,
-       land_leased_out,
+       land_leased_out, --! owner or user land_leased_out?
        owner_lfass_flag,
        user_lfass_flag,
        claim_id,
