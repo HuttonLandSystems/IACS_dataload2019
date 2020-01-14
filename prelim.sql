@@ -14,10 +14,11 @@
 3. Fix land_use_area IS NULL or 0
         copy land_parcel_area for single claims where land_parcel_area = bps_eligible_area
         update NULL/0 land_use_areas with inferred values from other years whre same land_use
-        --! adjust land_use_area to match bps_claimed_area -- not sure about this one
+        adjust land_use_area to match bps_claimed_area
+        adjust bps_claimed_area to match land_parcel_area WHERE bps_claimed_area > land_parcel_area
         delete remaining NULL land_use_area
    
-6. Joins 
+4. Joins 
         first join on hapar_id, year, land_use, land_use_area
             delete from original table where join above
         second join on hapar_id, year, land_use 
@@ -27,7 +28,7 @@
         fourth join on hapar_id, year 
             delete from original table where join above
 
-7. Clean up
+5. Clean up
     move leftover mutually exclusive ones to diff tables 
     find owners based on LLO flag and change them from user to owner from mutually exclusive table
     Assumes land_parcel_area = owner_land_parcel when owner > user
@@ -39,15 +40,15 @@
     Assumes user_land_activity is more correct when no match
     Assumes if either owner or renter has application_status = ‘under action/assessment’ then it is  
 
-8. Combine ALL into final table
+6. Combine ALL into final table
     Infer NON-SAF renter where LLO yes 
     Infer NON-SAF owner for mutually exclusive users 
 
 */
+-- create a table for excluded land use codes for use later
 DROP TABLE IF EXISTS excl;
 CREATE TEMP TABLE excl (land_use VARCHAR(30),
                                  descript VARCHAR(30));
-
 
 INSERT INTO excl (land_use, descript)
 VALUES ('BLU-GLS', 'Blueberries - glasshouse'), 
@@ -73,7 +74,6 @@ VALUES ('BLU-GLS', 'Blueberries - glasshouse'),
 -- DROPPED COLUMNS: payment_region, organic_status
 -- DROPPED DATA: all year 2019 data, ((land_use = 'EXCL' OR land_use = 'DELETED_LANDUSE') AND (land_use_area = 0 OR land_use_area IS NULL)), 
 --               duplicate records from payment_region, NULL hapar_id and land_use = ' '
-
 DROP TABLE IF EXISTS temp_permanent CASCADE;
 CREATE TEMP TABLE temp_permanent AS 
 WITH subq AS
@@ -433,20 +433,32 @@ WHERE s.hapar_id = sub2.hapar_id
     AND (s.land_use_area IS NULL
          OR s.land_use_area = 0); -- updates 113 rows 
 
+-- adjust bps_claimed_area to match land_parcel_area WHERE bps_claimed_area > land_parcel_area
+UPDATE temp_permanent 
+SET bps_claimed_area = land_parcel_area, 
+    change_note = CONCAT(change_note, 'adjust bps_claimed_area to match land_parcel_area where bps > parcel; ')
+WHERE bps_claimed_area > land_parcel_area; -- updates 660 rows 
+
+UPDATE temp_seasonal 
+SET bps_claimed_area = land_parcel_area, 
+    change_note = CONCAT(change_note, 'adjust bps_claimed_area to match land_parcel_area where bps > parcel; ')
+WHERE bps_claimed_area > land_parcel_area; -- updates 49 rows          
+
 --adjust land_use_area to match bps_claimed_area
 UPDATE temp_permanent
 SET land_use_area = bps_claimed_area,
     change_note = CONCAT(change_note, 'adjust owner land_use_area to match bps_claimed_area; ')
 WHERE bps_claimed_area <> land_use_area
     AND bps_claimed_area <> 0
-    AND bps_claimed_area < land_parcel_area; -- updates 183,590 rows
+    AND bps_claimed_area <= land_parcel_area; -- updates 186,183 rows
 
 UPDATE temp_seasonal
 SET land_use_area = bps_claimed_area,
     change_note = CONCAT(change_note, 'adjust user land_use_area to match bps_claimed_area; ')
 WHERE bps_claimed_area <> land_use_area
     AND bps_claimed_area <> 0
-    AND bps_claimed_area < land_parcel_area;; -- updates 21,194 rows
+    AND bps_claimed_area <= land_parcel_area;; -- updates 21,385 rows
+
 
 --delete remaining NULL land_use_area
 DELETE FROM 
@@ -503,7 +515,7 @@ FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
                                year,
                                land_use,
-                               land_use_area); --37,961 rows
+                               land_use_area); --37,957 rows
 
 --second join on hapar_id, year, land_use 
 WITH all_joined AS (
@@ -553,7 +565,7 @@ JOIN temp_seasonal AS s USING (hapar_id,
 INSERT INTO joined 
 SELECT * 
 FROM all_joined 
-WHERE claim_id NOT IN (SELECT claim_id FROM joined); --12,402 rows
+WHERE claim_id NOT IN (SELECT claim_id FROM joined); --12,406 rows
 
 --third join on hapar_id, year, land_use_area
 WITH all_joined AS (
@@ -657,7 +669,7 @@ WHERE claim_id NOT IN
          FROM joined); --39,002 rows
 
 -- deletes bad joins where good joins (i.e. 1st or 2nd joins) exist
-WITH first_join AS
+WITH good_join AS
     (SELECT SPLIT_PART(claim_id, ',', 1) AS claim_id_p,
             SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
      FROM joined
@@ -668,12 +680,12 @@ FROM joined
 WHERE change_note LIKE '%4%'
     AND (SPLIT_PART(joined.claim_id, ', ',1) IN
              (SELECT DISTINCT claim_id_p
-              FROM first_join)
+              FROM good_join)
          OR SPLIT_PART(joined.claim_id, ', ', 2) IN
              (SELECT DISTINCT claim_id_s
-              FROM first_join)); -- deletes 36,128 rows
+              FROM good_join)); -- deletes 36,128 rows
 
--- deletes problems joins based on specific criteria
+-- deletes problems fourth joins based on specific criteria
 DELETE
 FROM joined
 WHERE change_note LIKE '%4%'
@@ -692,27 +704,34 @@ WHERE change_note LIKE '%4%'
                   FROM excl)
              AND user_land_use IN
                  (SELECT land_use
-                  FROM excl))); -- deletes 1,218 rows
-        --! what about user_land_leased_out = Y?
+                  FROM excl))); -- deletes 1,219 rows
+
+-- deletes 0 land use joins 
+DELETE
+FROM joined
+WHERE owner_land_use_area = 0
+    AND user_land_use_area = 0; -- deletes 13 rows
 
 -- deletes many to one (user to owner) claims
+--! is this logical? look at hapar_id = 251969
+
 WITH sclaims AS
     (SELECT *
      FROM
          (SELECT claim_id_s,
                  COUNT(*)
           FROM
-              (SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s,
-                      LEFT(change_note, 1) AS join_no
+              (SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
                FROM joined) foo
           GROUP BY claim_id_s) bar
-     WHERE COUNT > 1) 
+     WHERE COUNT > 1)
 DELETE
 FROM joined
 WHERE SPLIT_PART(claim_id, ', ', 2) IN
         (SELECT claim_id_s
          FROM sclaims)
     AND change_note LIKE '%4%'; -- deletes 153 rows
+
 --! problems still exist: 
 --! should there be joins with user_bps_claimed_area <> 0? 
 --! What about where both owner_bps_claimed_area AND user_bps_claimed_area <> 0?
@@ -724,18 +743,18 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p
 FROM joined)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 1,807 rows 
+WHERE t.claim_id_p = a.claim_id_p; -- 54,131 rows 
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
 FROM joined)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --1,972 rows 
+WHERE t.claim_id_s = a.claim_id_s; --54,726 rows 
 
 --*STEP 6. Clean up 
 --move leftover mutually exclusive ones to diff tables 
-INSERT INTO combine
+DROP TABLE IF EXISTS combine; 
 SELECT mlc_hahol_id AS owner_mlc_hahol_id,
        NULL :: BIGINT AS user_mlc_hahol_id,
        habus_id AS owner_habus_id,
@@ -759,13 +778,14 @@ SELECT mlc_hahol_id AS owner_mlc_hahol_id,
        NULL :: VARCHAR AS user_land_activity,
        application_status AS owner_application_status,
        NULL :: VARCHAR AS user_application_status,
-       land_leased_out,
+       land_leased_out AS owner_land_leased_out,
+       NULL :: VARCHAR AS user_land_leased_out, 
        lfass_flag AS owner_lfass_flag,
        NULL :: VARCHAR AS user_lfass_flag,
        claim_id_p AS claim_id,
        year,
-       change_note
-FROM temp_permanent;  --last 41,321 rows 
+       change_note INTO TEMP TABLE combine
+FROM temp_permanent;  --1,844,144 rows 
 
 INSERT INTO combine 
 SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
@@ -791,17 +811,20 @@ SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
        land_activity AS user_land_activity,
        NULL :: VARCHAR AS owner_application_status,
        application_status AS user_application_status,
-       land_leased_out,
+       NULL :: VARCHAR AS owner_land_leased_out, 
+       land_leased_out AS user_land_leased_out,
        NULL :: VARCHAR AS owner_lfass_flag,
        lfass_flag AS user_lfass_flag,
        claim_id_s AS claim_id,
        year,
        change_note
-FROM temp_seasonal; --last 21,577 rows
+FROM temp_seasonal; --last 117,357 rows
 
 DROP TABLE temp_permanent; 
 DROP TABLE temp_seasonal;
 
+--! LEFT OFF HERE ON FRIDAY
+--! do i need to do this? 
 --find owners based on LLO flag and bps_claimed_area and changes them from user to owner from mutually exclusive table
 UPDATE combine
 SET owner_mlc_hahol_id = user_mlc_hahol_id,
@@ -878,7 +901,8 @@ SELECT owner_mlc_hahol_id,
            WHEN owner_application_status IS NULL THEN user_application_status
            WHEN user_application_status IS NULL THEN owner_application_status
        END AS application_status,
-       land_leased_out, --! owner or user land_leased_out?
+       owner_land_leased_out, --! owner or user land_leased_out? CASE WHEN owner_land_leased_out iS NULL... 
+       user_land_leased_out, 
        owner_lfass_flag,
        user_lfass_flag,
        claim_id,
@@ -886,6 +910,7 @@ SELECT owner_mlc_hahol_id,
        change_note
 FROM combine; -- moves 1,959,082 rows
 
+--! look at spatial data 
 --mark rows in joined where owner_land_parcel_area <> user_land_parcel_area
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume land_parcel_area = owner_land_parcel_area when owner > user; ')
@@ -967,7 +992,7 @@ SELECT owner_mlc_hahol_id,
             WHEN user_application_status LIKE '%Action%' AND owner_application_status <> user_application_status THEN user_application_status 
             ELSE owner_application_status
         END AS application_status, --changes 1,048 rows
-       land_leased_out,
+       land_leased_out, --! decide on land_leased_out
        owner_lfass_flag,
        user_lfass_flag,
        claim_id,
