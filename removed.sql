@@ -2264,3 +2264,33 @@ DELETE
 FROM joined AS j USING dupes AS d
 WHERE j.claim_id = d.claim_id
     AND j.change_note NOT LIKE '%1%'; -- deletes 121,281 bad joines
+
+-- deletes bad fourth joins where good joins (i.e. 1st) exist
+WITH good_join AS
+    (SELECT SPLIT_PART(claim_id, ',', 1) AS claim_id_p,
+            SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+     FROM joined
+     WHERE change_note LIKE '%1%')
+DELETE
+FROM joined
+WHERE change_note LIKE '%4%'
+    AND (SPLIT_PART(joined.claim_id, ', ',1) IN
+             (SELECT DISTINCT claim_id_p
+              FROM good_join)
+         OR SPLIT_PART(joined.claim_id, ', ', 2) IN
+             (SELECT DISTINCT claim_id_s
+              FROM good_join)); -- deletes 36,128 rows    
+
+--NOT GOOD CODE  deletes bad second joins where good joines (i.e. 1st) exist
+WITH good_join AS
+    (SELECT SPLIT_PART(claim_id, ',', 1) AS claim_id_p,
+            SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+     FROM joined
+     WHERE change_note LIKE '%1%' OR change_note LIKE '%2%')
+DELETE
+FROM joined
+WHERE change_note LIKE '%2%'
+    AND owner_land_leased_out = 'N'
+    AND SPLIT_PART(joined.claim_id, ', ', 2) IN
+        (SELECT DISTINCT claim_id_s
+         FROM good_join); -- removes 220 rows + 3,816 with change_note LIKE %2%              

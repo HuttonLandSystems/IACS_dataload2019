@@ -178,7 +178,7 @@ WITH same_lu AS (
 )
 
 -- run all the way up to join 
--- check hapars 1135,1144,1146,1725,1728
+-- check hapars 1144,1146,1725,1728
     SELECT mlc_hahol_id, 
            habus_id, 
            hahol_id, 
@@ -203,60 +203,63 @@ WITH same_lu AS (
 ORDER BY hapar_id, year
 
 
+--! LEFT OFF HERE ON FRIDAY
+--! do i need to do this? 
+--find owners based on LLO flag and bps_claimed_area and changes them from user to owner from mutually exclusive table
+UPDATE combine
+SET owner_mlc_hahol_id = user_mlc_hahol_id,
+    user_mlc_hahol_id = NULL,
+    owner_habus_id = user_habus_id,
+    user_habus_id = NULL,
+    owner_hahol_id = user_hahol_id,
+    user_hahol_id = NULL,
+    owner_land_parcel_area = user_land_parcel_area,
+    user_land_parcel_area = NULL,
+    owner_bps_eligible_area = user_bps_eligible_area,
+    user_bps_eligible_area = NULL,
+    owner_bps_claimed_area = user_bps_claimed_area,
+    user_bps_claimed_area = NULL,
+    owner_verified_exclusion = user_verified_exclusion,
+    user_verified_exclusion = NULL,
+    owner_land_use_area = user_land_use_area,
+    user_land_use_area = NULL,
+    owner_land_use = user_land_use,
+    user_land_use = NULL,
+    owner_land_activity = user_land_activity,
+    user_land_activity = NULL,
+    owner_application_status = user_application_status,
+    user_application_status = NULL,
+    owner_lfass_flag = user_lfass_flag,
+    user_lfass_flag = NULL,
+    claim_id = (CASE
+                    WHEN claim_id LIKE '%-01' THEN 'P' || TRIM('S'
+                                                               from claim_id) || TRIM(TRAILING '-01') || '-01'
+                    ELSE 'P' || TRIM('S'
+                                     from claim_id) || '-01'
+                END),
+    change_note = (CASE
+                       WHEN change_note LIKE '%record%' THEN 'S record moved from seasonal to permanent sheet based on LLO yes; '
+                       ELSE CONCAT(change_note, 'S record moved from seasonal to permanent sheet based on LLO yes and bps_claimed_area = 0; ')
+                   END)
+WHERE land_leased_out = 'Y'
+    AND user_land_use IS NOT NULL
+    AND user_bps_claimed_area = 0; --updates 378 records
 
-SELECT * 
-FROM temp_seasonal
-WHERE verified_exclusion <> land_use_area AND land_use IN (SELECT land_use FROM excl)
-ORDER BY hapar_id, year
-
---! Ask Doug
+-- check for 1st join (multiple owner claims to one renter)
 SELECT *
-FROM FINAL
-WHERE owner_land_use IN
-        (SELECT land_use
-         FROM excl)
-    AND user_land_use IN
-        (SELECT land_use
-         FROM excl)
-    AND user_land_use_area <> 0
-    AND user_land_use <> 'EXCL'
-    -- especially hapar_id = 369777 -- this one has matching hahol id
-    -- with 369777 owner PGRS needs to be subdivided into PGRS and RGR
-    -- the problem happens when I do second join and then delete all joined from original. I need to be able to join something again but how
-    -- SO THE TRICK IS NOT TO DELETE BUT DO JOINS ANYWAY AND DELETE DUPLICATES AFTERWARD
-
-
---! Do everything by FID and not claim
---! FID level analysis, no claim level
---TODO      compare owner_bps_eligible_area and user_bps_eligible_area
-
---TODO check claimed_area vs land_parcel-area
-
---!weird case with 36 ha of BUILDING and no matching land_uses
-SELECT * 
-FROM rpid.saf_permanent_land_parcels_deliv20190911 splpd
-WHERE hapar_id = 212811  AND YEAR = 2017
-UNION 
-SELECT * 
-FROM rpid.saf_seasonal_land_parcels_deliv20190911 sslpd
-WHERE hapar_id = 212811 AND YEAR = 2017
-ORDER BY YEAR, is_perm_flag
-
---!last checks 
-SELECT hapar_id,
-owner_verified_exclusion,
-user_verified_exclusion,
-       CASE
-           WHEN owner_verified_exclusion > user_verified_exclusion THEN owner_verified_exclusion - user_verified_exclusion
-           WHEN user_verified_exclusion > owner_verified_exclusion THEN user_verified_exclusion - owner_verified_exclusion
-           WHEN owner_verified_exclusion = owner_land_use_area THEN 0 
-           WHEN user_verified_exclusion = user_land_use_area THEN 0 
-           ELSE 9999999999           
-       END AS verified_exclusion_diff,
-       change_note
 FROM joined
-WHERE owner_verified_exclusion <> user_verified_exclusion
-ORDER BY verified_exclusion_diff DESC
+WHERE SPLIT_PART(claim_id, ', ', 1) IN
+        (SELECT claim_id_p
+         FROM
+             (SELECT claim_id_p,
+                     COUNT(*)
+              FROM
+                  (SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p
+                   FROM joined) bar
+              GROUP BY claim_id_p) foo
+         WHERE count > 1)
+    AND user_bps_claimed_area = 0
+    AND user_lfass_flag = 'N'
 
 --!! DO THE stuff above this line
 
@@ -375,3 +378,16 @@ SELECT *
 FROM temp_seasonal 
 WHERE hapar_id = 85859 -- so many claims? so many businesses? also these: 83863, 242798
 
+--weird case with 36 ha of BUILDING and no matching land_uses
+SELECT * 
+FROM rpid.saf_permanent_land_parcels_deliv20190911 splpd
+WHERE hapar_id = 212811  AND YEAR = 2017
+UNION 
+SELECT * 
+FROM rpid.saf_seasonal_land_parcels_deliv20190911 sslpd
+WHERE hapar_id = 212811 AND YEAR = 2017
+ORDER BY YEAR, is_perm_flag
+
+-- good example to catch PGRS - RGR subdivision by user 369777, 1144
+
+-- problems joins 40016, 401109 (two businesses claiming same piece)

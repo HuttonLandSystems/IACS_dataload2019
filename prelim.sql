@@ -471,51 +471,74 @@ WHERE land_use_area IS NULL; --deletes 1,168 rows
 
 --*Step 5. Join
 --first join on hapar_id, year, land_use, land_use_area
-DROP TABLE IF EXISTS joined; 
-SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
-       s.mlc_hahol_id AS user_mlc_hahol_id,
-       p.habus_id AS owner_habus_id,
-       s.habus_id AS user_habus_id,
-       p.hahol_id AS owner_hahol_id,
-       s.hahol_id AS user_hahol_id,
-       hapar_id,
-       p.land_parcel_area AS owner_land_parcel_area,
-       s.land_parcel_area AS user_land_parcel_area,
-       p.bps_eligible_area AS owner_bps_eligible_area,
-       s.bps_eligible_area AS user_bps_eligible_area,
-       p.bps_claimed_area AS owner_bps_claimed_area,
-       s.bps_claimed_area AS user_bps_claimed_area,
-       p.verified_exclusion AS owner_verified_exclusion,
-       s.verified_exclusion AS user_verified_exclusion,
-       p.land_use_area AS owner_land_use_area,
-       s.land_use_area AS user_land_use_area,
-       p.land_use AS owner_land_use,
-       s.land_use AS user_land_use,
-       p.land_activity AS owner_land_activity,
-       s.land_activity AS user_land_activity,
-       p.application_status AS owner_application_status,
-       s.application_status AS user_application_status,
-       p.land_leased_out AS owner_land_leased_out,
-       s.land_leased_out AS user_land_leased_out, 
-       p.lfass_flag AS owner_lfass_flag,
-       s.lfass_flag AS user_lfass_flag,
-       CONCAT(claim_id_p, ', ', claim_id_s) AS claim_id,
-       year,
-       CASE
-           WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT('1first join; ', p.change_note, s.change_note)
-           WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN CONCAT('1first join; ', s.change_note)
-           WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN CONCAT('1first join; ', p.change_note)
-           WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN '1first join; '
-       END AS change_note INTO TEMP TABLE joined
-FROM temp_permanent AS p
-JOIN temp_seasonal AS s USING (hapar_id,
-                               year,
-                               land_use,
-                               land_use_area); --37,957 rows
+DROP TABLE IF EXISTS joined;
+SELECT * INTO TEMP TABLE joined
+FROM
+    (SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
+            s.mlc_hahol_id AS user_mlc_hahol_id,
+            p.habus_id AS owner_habus_id,
+            s.habus_id AS user_habus_id,
+            p.hahol_id AS owner_hahol_id,
+            s.hahol_id AS user_hahol_id,
+            hapar_id,
+            p.land_parcel_area AS owner_land_parcel_area,
+            s.land_parcel_area AS user_land_parcel_area,
+            p.bps_eligible_area AS owner_bps_eligible_area,
+            s.bps_eligible_area AS user_bps_eligible_area,
+            p.bps_claimed_area AS owner_bps_claimed_area,
+            s.bps_claimed_area AS user_bps_claimed_area,
+            p.verified_exclusion AS owner_verified_exclusion,
+            s.verified_exclusion AS user_verified_exclusion,
+            p.land_use_area AS owner_land_use_area,
+            s.land_use_area AS user_land_use_area,
+            p.land_use AS owner_land_use,
+            s.land_use AS user_land_use,
+            p.land_activity AS owner_land_activity,
+            s.land_activity AS user_land_activity,
+            p.application_status AS owner_application_status,
+            s.application_status AS user_application_status,
+            p.land_leased_out AS owner_land_leased_out,
+            s.land_leased_out AS user_land_leased_out,
+            p.lfass_flag AS owner_lfass_flag,
+            s.lfass_flag AS user_lfass_flag,
+            CONCAT(claim_id_p, ', ', claim_id_s) AS claim_id,
+            year,
+            CASE
+                WHEN p.change_note IS NOT NULL
+                     AND s.change_note IS NOT NULL THEN CONCAT('1first join; ', p.change_note, s.change_note)
+                WHEN p.change_note IS NULL
+                     AND s.change_note IS NOT NULL THEN CONCAT('1first join; ', s.change_note)
+                WHEN s.change_note IS NULL
+                     AND p.change_note IS NOT NULL THEN CONCAT('1first join; ', p.change_note)
+                WHEN p.change_note IS NULL
+                     AND s.change_note IS NULL THEN '1first join; '
+            END AS change_note
+     FROM temp_permanent AS p
+     JOIN temp_seasonal AS s USING (hapar_id,
+                                    year,
+                                    land_use,
+                                    land_use_area)) foo
+WHERE owner_land_leased_out = 'Y'
+    OR (owner_land_leased_out = 'N'
+        AND owner_bps_claimed_area = 0); --33,481 rows
+
+--delete from original table where perfect join above
+WITH joined_ids AS (
+SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
+       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+FROM joined)
+DELETE 
+FROM temp_permanent AS t USING joined_ids AS a  
+WHERE t.claim_id_p = a.claim_id_p; -- 33,108 rows
+--! this means there are duplicate owners but not renters - check
+
+WITH joined_ids AS (
+SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
+       SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+FROM joined)
+DELETE 
+FROM temp_seasonal AS t USING joined_ids AS a  
+WHERE t.claim_id_s = a.claim_id_s; --33,481 rows                                
 
 --second join on hapar_id, year, land_use 
 WITH all_joined AS (
@@ -565,7 +588,7 @@ JOIN temp_seasonal AS s USING (hapar_id,
 INSERT INTO joined 
 SELECT * 
 FROM all_joined 
-WHERE claim_id NOT IN (SELECT claim_id FROM joined); --12,406 rows
+WHERE claim_id NOT IN (SELECT claim_id FROM joined); -- 16,447 rows
 
 --third join on hapar_id, year, land_use_area
 WITH all_joined AS (
@@ -615,7 +638,7 @@ JOIN temp_seasonal AS s USING (hapar_id,
 INSERT INTO joined 
 SELECT * 
 FROM all_joined 
-WHERE claim_id NOT IN (SELECT claim_id FROM joined); --3,445 rows
+WHERE claim_id NOT IN (SELECT claim_id FROM joined); --3,373 rows
 
 --fourth join on hapar_id, year 
 WITH all_joined AS
@@ -666,24 +689,7 @@ SELECT *
 FROM all_joined
 WHERE claim_id NOT IN
         (SELECT claim_id
-         FROM joined); --39,002 rows
-
--- deletes bad joins where good joins (i.e. 1st or 2nd joins) exist
-WITH good_join AS
-    (SELECT SPLIT_PART(claim_id, ',', 1) AS claim_id_p,
-            SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
-     FROM joined
-     WHERE change_note LIKE '%1%'
-         OR change_note LIKE '%2%')
-DELETE
-FROM joined
-WHERE change_note LIKE '%4%'
-    AND (SPLIT_PART(joined.claim_id, ', ',1) IN
-             (SELECT DISTINCT claim_id_p
-              FROM good_join)
-         OR SPLIT_PART(joined.claim_id, ', ', 2) IN
-             (SELECT DISTINCT claim_id_s
-              FROM good_join)); -- deletes 36,128 rows
+         FROM joined); -- 9,440 rows
 
 -- deletes problems fourth joins based on specific criteria
 DELETE
@@ -704,7 +710,7 @@ WHERE change_note LIKE '%4%'
                   FROM excl)
              AND user_land_use IN
                  (SELECT land_use
-                  FROM excl))); -- deletes 1,219 rows
+                  FROM excl))); -- deletes 5,541 rows
 
 -- deletes 0 land use joins 
 DELETE
@@ -730,7 +736,7 @@ FROM joined
 WHERE SPLIT_PART(claim_id, ', ', 2) IN
         (SELECT claim_id_s
          FROM sclaims)
-    AND change_note LIKE '%4%'; -- deletes 153 rows
+    AND change_note LIKE '%4%'; -- deletes 1093 rows
 
 --! problems still exist: 
 --! should there be joins with user_bps_claimed_area <> 0? 
@@ -743,14 +749,14 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p
 FROM joined)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 54,131 rows 
+WHERE t.claim_id_p = a.claim_id_p; -- 20,693 rows 
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
 FROM joined)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; --54,726 rows 
+WHERE t.claim_id_s = a.claim_id_s; -- 22,778 rows 
 
 --*STEP 6. Clean up 
 --move leftover mutually exclusive ones to diff tables 
@@ -785,7 +791,7 @@ SELECT mlc_hahol_id AS owner_mlc_hahol_id,
        claim_id_p AS claim_id,
        year,
        change_note INTO TEMP TABLE combine
-FROM temp_permanent;  --1,844,144 rows 
+FROM temp_permanent;  --1,844,474 rows 
 
 INSERT INTO combine 
 SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
@@ -818,52 +824,10 @@ SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
        claim_id_s AS claim_id,
        year,
        change_note
-FROM temp_seasonal; --last 117,357 rows
+FROM temp_seasonal; --last 115,824 rows
 
 DROP TABLE temp_permanent; 
 DROP TABLE temp_seasonal;
-
---! LEFT OFF HERE ON FRIDAY
---! do i need to do this? 
---find owners based on LLO flag and bps_claimed_area and changes them from user to owner from mutually exclusive table
-UPDATE combine
-SET owner_mlc_hahol_id = user_mlc_hahol_id,
-    user_mlc_hahol_id = NULL,
-    owner_habus_id = user_habus_id,
-    user_habus_id = NULL,
-    owner_hahol_id = user_hahol_id,
-    user_hahol_id = NULL,
-    owner_land_parcel_area = user_land_parcel_area,
-    user_land_parcel_area = NULL,
-    owner_bps_eligible_area = user_bps_eligible_area,
-    user_bps_eligible_area = NULL,
-    owner_bps_claimed_area = user_bps_claimed_area,
-    user_bps_claimed_area = NULL,
-    owner_verified_exclusion = user_verified_exclusion,
-    user_verified_exclusion = NULL,
-    owner_land_use_area = user_land_use_area,
-    user_land_use_area = NULL,
-    owner_land_use = user_land_use,
-    user_land_use = NULL,
-    owner_land_activity = user_land_activity,
-    user_land_activity = NULL,
-    owner_application_status = user_application_status,
-    user_application_status = NULL,
-    owner_lfass_flag = user_lfass_flag,
-    user_lfass_flag = NULL,
-    claim_id = (CASE
-                    WHEN claim_id LIKE '%-01' THEN 'P' || TRIM('S'
-                                                               from claim_id) || TRIM(TRAILING '-01') || '-01'
-                    ELSE 'P' || TRIM('S'
-                                     from claim_id) || '-01'
-                END),
-    change_note = (CASE
-                       WHEN change_note LIKE '%record%' THEN 'S record moved from seasonal to permanent sheet based on LLO yes; '
-                       ELSE CONCAT(change_note, 'S record moved from seasonal to permanent sheet based on LLO yes and bps_claimed_area = 0; ')
-                   END)
-WHERE land_leased_out = 'Y'
-    AND user_land_use IS NOT NULL
-    AND user_bps_claimed_area = 0; --updates 378 records
 
 --*Step 7. Combine ALL rows into final table
 DROP TABLE IF EXISTS final;
@@ -908,47 +872,47 @@ SELECT owner_mlc_hahol_id,
        claim_id,
        year,
        change_note
-FROM combine; -- moves 1,959,082 rows
+FROM combine; -- moves 1,960,298 rows
 
 --! look at spatial data 
 --mark rows in joined where owner_land_parcel_area <> user_land_parcel_area
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume land_parcel_area = owner_land_parcel_area when owner > user; ')
-WHERE owner_land_parcel_area > user_land_parcel_area; -- updates 152 rows
+WHERE owner_land_parcel_area > user_land_parcel_area; -- updates 140 rows
 
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume land_parcel_area = user_land_parcel_area when user > owner; ')
-WHERE owner_land_parcel_area < user_land_parcel_area; -- updates 165 rows
+WHERE owner_land_parcel_area < user_land_parcel_area; -- updates 160 rows
 
 --mark rows in joined where owner_bps_eligible_area <> user_bps_eligible_area
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume bps_eligible_area = owner_bps_eligible_area when owner > user; ')
-WHERE owner_bps_eligible_area > user_bps_eligible_area; -- updates 162 rows
+WHERE owner_bps_eligible_area > user_bps_eligible_area; -- updates 151 rows
 
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume bps_eligible_area = user_bps_eligible_area when user > owner; ')
-WHERE owner_bps_eligible_area < user_bps_eligible_area; -- updates 229 rows
+WHERE owner_bps_eligible_area < user_bps_eligible_area; -- updates 210 rows
 
 --mark rows in joined where owner_verified_exclusion <> user_verified_exclusion
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume verified_exclusion = owner_verified_exclusion when owner > user; ')
-WHERE owner_verified_exclusion > user_verified_exclusion; -- updates 1,699 rows
+WHERE owner_verified_exclusion > user_verified_exclusion; -- updates 1,524 rows
 
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume verified_exclusion = user_verified_exclusion WHEN user > owner; ')
-WHERE owner_verified_exclusion < user_verified_exclusion; -- updates 2,111 rows
+WHERE owner_verified_exclusion < user_verified_exclusion; -- updates 2,228 rows
 
 --mark rows in joined where owner_land_activity <> user_land_activity 
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'owner and user land_activity choice based on assumption user knows best; ')
-WHERE owner_land_activity <> user_land_activity; -- updates 38,804 rows
+WHERE owner_land_activity <> user_land_activity; -- updates 38,912 rows
 
 --mark rows in joined where owner_application_status <> user_application_status
 UPDATE joined
 SET change_note = CONCAT(change_note, 'application status assumed under action/assessment if either owner or user; ')
 WHERE (owner_application_status LIKE '%Action%'
        OR user_application_status LIKE '%Action')
-    AND owner_application_status <> user_application_status; -- updates 1,048 rows
+    AND owner_application_status <> user_application_status; -- updates 1,083 rows
 
 -- move joined data into last table
 INSERT INTO final 
@@ -963,19 +927,19 @@ SELECT owner_mlc_hahol_id,
            WHEN owner_land_parcel_area > user_land_parcel_area THEN owner_land_parcel_area
            WHEN user_land_parcel_area > owner_land_parcel_area THEN user_land_parcel_area
            ELSE owner_land_parcel_area
-       END AS land_parcel_area, --changes 321 rows with than 5.77 ha change
+       END AS land_parcel_area, --changes 321 rows with than 5.77 ha change -- NEED TO UPDATE
        CASE 
             WHEN owner_bps_eligible_area > user_bps_eligible_area THEN owner_bps_eligible_area 
             WHEN user_bps_eligible_area > owner_bps_eligible_area THEN user_bps_eligible_area
             ELSE owner_bps_eligible_area
-        END AS bps_eligible_area, --changes 398 rows with than 273.3 ha change
+        END AS bps_eligible_area, --changes 398 rows with than 273.3 ha change-- NEED TO UPDATE
        owner_bps_claimed_area,
        user_bps_claimed_area,
        CASE 
             WHEN owner_verified_exclusion > user_verified_exclusion THEN owner_verified_exclusion
             WHEN user_verified_exclusion > owner_verified_exclusion THEN user_verified_exclusion
             ELSE owner_verified_exclusion
-        END AS verified_exclusion, --changes 3,810 rows with 4,208.76 ha change
+        END AS verified_exclusion, --changes 3,810 rows with 4,208.76 ha change-- NEED TO UPDATE
        owner_land_use_area,
        user_land_use_area,
        owner_land_use,
@@ -985,31 +949,32 @@ SELECT owner_mlc_hahol_id,
             WHEN user_land_activity = '' THEN owner_land_activity 
             WHEN (user_land_activity = 'No Activity' OR user_land_activity = 'Unspecified') AND owner_land_activity <> '' THEN owner_land_activity
             ELSE user_land_activity
-        END AS land_activity, --changes 38,804 rows 
+        END AS land_activity, --changes 38,804 rows -- NEED TO UPDATE
        CASE 
             WHEN owner_application_status = user_application_status THEN owner_application_status
             WHEN owner_application_status LIKE '%Action%' AND owner_application_status <> user_application_status THEN owner_application_status
             WHEN user_application_status LIKE '%Action%' AND owner_application_status <> user_application_status THEN user_application_status 
             ELSE owner_application_status
-        END AS application_status, --changes 1,048 rows
-       land_leased_out, --! decide on land_leased_out
+        END AS application_status, --changes 1,048 rows-- NEED TO UPDATE
+       owner_land_leased_out,
+       user_land_leased_out,  --! decide on land_leased_out
        owner_lfass_flag,
        user_lfass_flag,
        claim_id,
        year,
        change_note
-FROM joined; -- moves 56,525 rows 
+FROM joined; -- moves 56,427 rows 
 
 --infer NON-SAF renter where LLO yes 
 UPDATE final 
 SET user_land_use = 'NON_SAF',
 change_note = CONCAT(change_note, 'infer non-SAF renter; ')
-WHERE user_habus_id IS NULL AND land_leased_out = 'Y'; --updates 7,589 rows
+WHERE user_habus_id IS NULL AND owner_land_leased_out = 'Y'; --updates 7,248 rows
 
 --infer NON-SAF owner for mutually exclusive users
 UPDATE final 
 SET owner_land_use = 'NON_SAF',
 change_note = CONCAT(change_note, 'infer non-SAF owner; ')
-WHERE owner_habus_id IS NULL; --updates 114,951 rows
+WHERE owner_habus_id IS NULL; --updates 115,824 rows
 
 
