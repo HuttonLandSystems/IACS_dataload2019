@@ -978,3 +978,5 @@ change_note = CONCAT(change_note, 'infer non-SAF owner; ')
 WHERE owner_habus_id IS NULL; --updates 115,824 rows
 
 
+
+
