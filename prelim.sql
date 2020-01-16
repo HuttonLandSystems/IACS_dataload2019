@@ -826,8 +826,8 @@ SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
        change_note
 FROM temp_seasonal; --last 115,824 rows
 
-DROP TABLE temp_permanent; 
-DROP TABLE temp_seasonal;
+--DROP TABLE temp_permanent; 
+--DROP TABLE temp_seasonal;
 
 --*Step 7. Combine ALL rows into final table
 DROP TABLE IF EXISTS final;
@@ -977,6 +977,32 @@ SET owner_land_use = 'NON_SAF',
 change_note = CONCAT(change_note, 'infer non-SAF owner; ')
 WHERE owner_habus_id IS NULL; --updates 115,824 rows
 
-
+-- make land_parcel_area match for hapar_ids and year (biggest diff is 2.35 ha)
+UPDATE final AS f 
+SET land_parcel_area = l.max_parcel,
+    change_note = CONCAT(final.change_note, 'adjust land_parcel_area to max(parcel) where different in same year; ')
+FROM final
+JOIN
+    (SELECT hapar_id,
+            MAX(land_parcel_area) AS max_parcel
+     FROM final
+     WHERE hapar_id IN
+             (SELECT hapar_id
+              FROM
+                  (SELECT hapar_id,
+                          COUNT(*)
+                   FROM
+                       (SELECT hapar_id,
+                               land_parcel_area,
+                               COUNT(*)
+                        FROM final
+                        WHERE YEAR = 2017
+                        GROUP BY hapar_id,
+                                 land_parcel_area) foo
+                   GROUP BY hapar_id) bar
+              WHERE count > 1)
+         AND YEAR = 2017
+     GROUP BY hapar_id) AS l USING (hapar_id)
+WHERE final.year = 2017
 
 

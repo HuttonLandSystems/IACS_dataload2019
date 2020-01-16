@@ -357,6 +357,37 @@ FROM
                    user_land_parcel_area) foo) foo2
 WHERE ROW_NUMBER > 1
 
+--This code finds differences in land_parcel_area in same year 
+SELECT *
+FROM
+    (SELECT hapar_id,
+            max_parcel,
+            min_parcel,
+            max_parcel - min_parcel AS diff
+     FROM
+         (SELECT hapar_id,
+                 MAX(land_parcel_area) AS max_parcel,
+                 MIN(land_parcel_area) AS min_parcel
+          FROM final
+          WHERE hapar_id IN
+                  (SELECT hapar_id
+                   FROM
+                       (SELECT hapar_id,
+                               COUNT(*)
+                        FROM
+                            (SELECT hapar_id,
+                                    land_parcel_area,
+                                    COUNT(*)
+                             FROM final
+                             WHERE YEAR = 2017
+                             GROUP BY hapar_id,
+                                      land_parcel_area) foo
+                        GROUP BY hapar_id) bar
+                   WHERE count > 1)
+              AND YEAR = 2017
+          GROUP BY hapar_id) foobar) foo2
+ORDER BY diff DESC
+
 --TODO  This code finds digi_area used in join aka proportion of good area for one year
 -- 5,130,084/6,476,784 hectares = 79.2% of 2018 parcels (area)
 -- 5,074,587/6,479,879 hectares = 78.3% of 2019 parcels (area)
@@ -387,6 +418,9 @@ FROM
      GROUP BY hapar_id,
               digi_area) foobar
 
+--  5,130,084/5,236,722 = 98.0% 2018
+--  5,074,587/5,226,963 = 97.1% 2019     
+
 --TODO how many have at least one owner or user 
 -- 444,518‬/525,621 = 84.6% of 2018 parcels have at least one claim associated 
 -- 440,026‬/526,899 = 83.5% of 2019 parcels have at least one claim associated 
@@ -410,8 +444,16 @@ EXCEPT
      FROM rpid.saf_seasonal_land_parcels_deliv20190911
      WHERE YEAR = 2017)
 
---TODO how many spatial fields have no match at all 
+-- 444,518‬/449,556‬ = 98.9%
+-- 440,026/451,774 = 97.4%
+
 --TODO how many time does digi_area match land_parcel_area within 0.1 and 0.01 threshold 
+--TODO count of user businesses map
+--TODO underclaims / overclaims
+--TODO no of landuses per fid 
+--TODO types of land use categoriezed 
+--TODO no seasonal renters 
+
 
 -- This code finds duplicate land use codes  
 -- not a problem
@@ -433,6 +475,7 @@ ORDER BY lu_count DESC,
 SELECT * 
 FROM temp_seasonal 
 WHERE hapar_id = 85859 -- so many claims? so many businesses? also these: 83863, 242798
+--! look at spatial
 
 --weird case with 36 ha of BUILDING and no matching land_uses
 SELECT * 
@@ -447,3 +490,5 @@ ORDER BY YEAR, is_perm_flag
 -- good example to catch PGRS - RGR subdivision by user 369777, 1144
 
 -- problems joins 40016, 401109 (two businesses claiming same piece)
+
+--! merge same land_use 
