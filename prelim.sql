@@ -271,7 +271,7 @@ SET claim_id_s = 'S' || claim_id_s
 WHERE claim_id_s NOT LIKE '%S%';
 
 --*Step 2. Fix land_parcel_area IS NULL or 0
---infer land_parcel_area where same hapar_id
+--infer land_parcel_area where same hapar_id in different year 
 UPDATE temp_permanent AS t
 SET land_parcel_area = sub.land_parcel_area,
     change_note = CONCAT(t.change_note, 'land_parcel_area inferred from same hapar_id; ')
@@ -368,7 +368,7 @@ WHERE temp_seasonal.hapar_id = sub.hapar_id
     AND temp_seasonal.year = sub.year
     AND temp_seasonal.land_parcel_area = temp_seasonal.bps_eligible_area; -- updates 842 rows 
 
--- update NULL/0 land_use_areas with inferred values from other years whre same land_use
+-- Copy values from other years where same land_use
 WITH sub1 AS
     (SELECT *
      FROM
@@ -689,7 +689,7 @@ SELECT *
 FROM all_joined
 WHERE claim_id NOT IN
         (SELECT claim_id
-         FROM joined); -- 9,440 rows
+         FROM joined); -- 9,773 rows
 
 -- deletes problems fourth joins based on specific criteria
 DELETE
@@ -712,15 +712,7 @@ WHERE change_note LIKE '%4%'
                  (SELECT land_use
                   FROM excl))); -- deletes 5,541 rows
 
--- deletes 0 land use joins 
-DELETE
-FROM joined
-WHERE owner_land_use_area = 0
-    AND user_land_use_area = 0; -- deletes 13 rows
-
--- deletes many to one (user to owner) claims
---! is this logical? look at hapar_id = 251969
-
+-- deletes many to one (user to owner) claims - 4th joins
 WITH sclaims AS
     (SELECT *
      FROM
@@ -736,12 +728,7 @@ FROM joined
 WHERE SPLIT_PART(claim_id, ', ', 2) IN
         (SELECT claim_id_s
          FROM sclaims)
-    AND change_note LIKE '%4%'; -- deletes 1093 rows
-
---! problems still exist: 
---! should there be joins with user_bps_claimed_area <> 0? 
---! What about where both owner_bps_claimed_area AND user_bps_claimed_area <> 0?
-
+    AND change_note LIKE '%4%'; -- deletes 1,093 rows
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -749,14 +736,14 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p
 FROM joined)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 20,693 rows 
+WHERE t.claim_id_p = a.claim_id_p; -- 20,694 rows 
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
 FROM joined)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; -- 22,778 rows 
+WHERE t.claim_id_s = a.claim_id_s; -- 22,779 rows 
 
 --*STEP 6. Clean up 
 --move leftover mutually exclusive ones to diff tables 
@@ -791,7 +778,7 @@ SELECT mlc_hahol_id AS owner_mlc_hahol_id,
        claim_id_p AS claim_id,
        year,
        change_note INTO TEMP TABLE combine
-FROM temp_permanent;  --1,844,474 rows 
+FROM temp_permanent;  --1,844,473 rows 
 
 INSERT INTO combine 
 SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
@@ -824,7 +811,7 @@ SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
        claim_id_s AS claim_id,
        year,
        change_note
-FROM temp_seasonal; --last 115,824 rows
+FROM temp_seasonal; --last 115,823 rows
 
 --DROP TABLE temp_permanent; 
 --DROP TABLE temp_seasonal;
@@ -872,7 +859,7 @@ SELECT owner_mlc_hahol_id,
        claim_id,
        year,
        change_note
-FROM combine; -- moves 1,960,298 rows
+FROM combine; -- moves 1,960,296 rows
 
 --! look at spatial data 
 --mark rows in joined where owner_land_parcel_area <> user_land_parcel_area
@@ -963,7 +950,7 @@ SELECT owner_mlc_hahol_id,
        claim_id,
        year,
        change_note
-FROM joined; -- moves 56,427 rows 
+FROM joined; -- moves 56,440 rows 
 
 --infer NON-SAF renter where LLO yes 
 UPDATE final 
@@ -975,14 +962,38 @@ WHERE user_habus_id IS NULL AND owner_land_leased_out = 'Y'; --updates 7,248 row
 UPDATE final 
 SET owner_land_use = 'NON_SAF',
 change_note = CONCAT(change_note, 'infer non-SAF owner; ')
-WHERE owner_habus_id IS NULL; --updates 115,824 rows
+WHERE owner_habus_id IS NULL; --updates 115,823 rows
 
 -- make land_parcel_area match for hapar_ids and year (biggest diff is 2.35 ha)
-UPDATE final AS f 
-SET land_parcel_area = l.max_parcel,
+WITH max_parcel AS
+    (SELECT hapar_id,
+            MAX(land_parcel_area) AS max_parcel
+     FROM final
+     WHERE hapar_id IN
+             (SELECT hapar_id
+              FROM
+                  (SELECT hapar_id,
+                          COUNT(*)
+                   FROM
+                       (SELECT hapar_id,
+                               land_parcel_area,
+                               COUNT(*)
+                        FROM final
+                        WHERE YEAR = 2016
+                        GROUP BY hapar_id,
+                                 land_parcel_area) foo
+                   GROUP BY hapar_id) bar
+              WHERE count > 1)
+         AND YEAR = 2016
+     GROUP BY hapar_id)
+UPDATE final AS f
+SET land_parcel_area = m.max_parcel,
     change_note = CONCAT(final.change_note, 'adjust land_parcel_area to max(parcel) where different in same year; ')
-FROM final
-JOIN
+FROM max_parcel AS m 
+JOIN final USING (hapar_id)
+WHERE f.year = 2016 AND max_parcel <> f.land_parcel_area; -- updates 1,127 rows
+
+WITH max_parcel AS
     (SELECT hapar_id,
             MAX(land_parcel_area) AS max_parcel
      FROM final
@@ -1002,7 +1013,40 @@ JOIN
                    GROUP BY hapar_id) bar
               WHERE count > 1)
          AND YEAR = 2017
-     GROUP BY hapar_id) AS l USING (hapar_id)
-WHERE final.year = 2017
+     GROUP BY hapar_id)
+UPDATE final AS f
+SET land_parcel_area = m.max_parcel,
+    change_note = CONCAT(final.change_note, 'adjust land_parcel_area to max(parcel) where different in same year; ')
+FROM max_parcel AS m 
+JOIN final USING (hapar_id)
+WHERE final.year = 2017 AND max_parcel <> final.land_parcel_area; -- 814 rows
+
+WITH max_parcel AS
+    (SELECT hapar_id,
+            MAX(land_parcel_area) AS max_parcel
+     FROM final
+     WHERE hapar_id IN
+             (SELECT hapar_id
+              FROM
+                  (SELECT hapar_id,
+                          COUNT(*)
+                   FROM
+                       (SELECT hapar_id,
+                               land_parcel_area,
+                               COUNT(*)
+                        FROM final
+                        WHERE YEAR = 2018
+                        GROUP BY hapar_id,
+                                 land_parcel_area) foo
+                   GROUP BY hapar_id) bar
+              WHERE count > 1)
+         AND YEAR = 2018
+     GROUP BY hapar_id)
+UPDATE final AS f
+SET land_parcel_area = m.max_parcel,
+    change_note = CONCAT(final.change_note, 'adjust land_parcel_area to max(parcel) where different in same year; ')
+FROM max_parcel AS m 
+JOIN final USING (hapar_id)
+WHERE final.year = 2018 AND max_parcel <> final.land_parcel_area;
 
 

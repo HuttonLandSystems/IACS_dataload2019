@@ -203,47 +203,7 @@ WITH same_lu AS (
 ORDER BY hapar_id, year
 
 
---! LEFT OFF HERE ON FRIDAY
---! do i need to do this? 
---find owners based on LLO flag and bps_claimed_area and changes them from user to owner from mutually exclusive table
-UPDATE combine
-SET owner_mlc_hahol_id = user_mlc_hahol_id,
-    user_mlc_hahol_id = NULL,
-    owner_habus_id = user_habus_id,
-    user_habus_id = NULL,
-    owner_hahol_id = user_hahol_id,
-    user_hahol_id = NULL,
-    owner_land_parcel_area = user_land_parcel_area,
-    user_land_parcel_area = NULL,
-    owner_bps_eligible_area = user_bps_eligible_area,
-    user_bps_eligible_area = NULL,
-    owner_bps_claimed_area = user_bps_claimed_area,
-    user_bps_claimed_area = NULL,
-    owner_verified_exclusion = user_verified_exclusion,
-    user_verified_exclusion = NULL,
-    owner_land_use_area = user_land_use_area,
-    user_land_use_area = NULL,
-    owner_land_use = user_land_use,
-    user_land_use = NULL,
-    owner_land_activity = user_land_activity,
-    user_land_activity = NULL,
-    owner_application_status = user_application_status,
-    user_application_status = NULL,
-    owner_lfass_flag = user_lfass_flag,
-    user_lfass_flag = NULL,
-    claim_id = (CASE
-                    WHEN claim_id LIKE '%-01' THEN 'P' || TRIM('S'
-                                                               from claim_id) || TRIM(TRAILING '-01') || '-01'
-                    ELSE 'P' || TRIM('S'
-                                     from claim_id) || '-01'
-                END),
-    change_note = (CASE
-                       WHEN change_note LIKE '%record%' THEN 'S record moved from seasonal to permanent sheet based on LLO yes; '
-                       ELSE CONCAT(change_note, 'S record moved from seasonal to permanent sheet based on LLO yes and bps_claimed_area = 0; ')
-                   END)
-WHERE land_leased_out = 'Y'
-    AND user_land_use IS NOT NULL
-    AND user_bps_claimed_area = 0; --updates 378 records
+
 
 -- check for 1st join (multiple owner claims to one renter)
 SELECT *
@@ -259,7 +219,13 @@ WHERE SPLIT_PART(claim_id, ', ', 1) IN
               GROUP BY claim_id_p) foo
          WHERE count > 1)
     AND user_bps_claimed_area = 0
-    AND user_lfass_flag = 'N'
+    AND user_lfass_flag = 'N'; -- 789 rows
+
+
+--! problems still exist: 
+--! should there be joins with user_bps_claimed_area <> 0? 
+--! What about where both owner_bps_claimed_area AND user_bps_claimed_area <> 0?
+
 
 --!! DO THE stuff above this line
 
@@ -450,9 +416,9 @@ EXCEPT
 --TODO how many time does digi_area match land_parcel_area within 0.1 and 0.01 threshold 
 --TODO count of user businesses map
 --TODO underclaims / overclaims
---TODO no of landuses per fid 
+--TODO number of landuses per fid 
 --TODO types of land use categoriezed 
---TODO no seasonal renters 
+--TODO number seasonal renters 
 
 
 -- This code finds duplicate land use codes  

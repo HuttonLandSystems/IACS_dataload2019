@@ -2294,3 +2294,72 @@ WHERE change_note LIKE '%2%'
     AND SPLIT_PART(joined.claim_id, ', ', 2) IN
         (SELECT DISTINCT claim_id_s
          FROM good_join); -- removes 220 rows + 3,816 with change_note LIKE %2%              
+
+-- finds duplicate owner declarations after first join 
+SELECT *
+FROM joined
+WHERE SPLIT_PART(claim_id, ', ', 1) IN
+        (SELECT claim_id_p
+         FROM
+             (SELECT hapar_id,
+                     YEAR,
+                     claim_id_p,
+                     COUNT(*)
+              FROM
+                  (SELECT hapar_id,
+                          YEAR,
+                          SPLIT_PART(claim_id, ', ', 1) AS claim_id_p
+                   FROM joined) fo
+              GROUP BY hapar_id,
+                       YEAR,
+                       claim_id_p) bar
+         WHERE count > 1)
+    AND owner_land_use NOT IN
+        (SELECT land_use
+         FROM excl)         
+
+-- deletes 0 land use joins 
+DELETE
+FROM joined
+WHERE owner_land_use_area = 0
+    AND user_land_use_area = 0; -- deletes 13 rows       
+
+--find owners based on LLO flag and bps_claimed_area and changes them from user to owner from mutually exclusive table
+UPDATE combine
+SET owner_mlc_hahol_id = user_mlc_hahol_id,
+    user_mlc_hahol_id = NULL,
+    owner_habus_id = user_habus_id,
+    user_habus_id = NULL,
+    owner_hahol_id = user_hahol_id,
+    user_hahol_id = NULL,
+    owner_land_parcel_area = user_land_parcel_area,
+    user_land_parcel_area = NULL,
+    owner_bps_eligible_area = user_bps_eligible_area,
+    user_bps_eligible_area = NULL,
+    owner_bps_claimed_area = user_bps_claimed_area,
+    user_bps_claimed_area = NULL,
+    owner_verified_exclusion = user_verified_exclusion,
+    user_verified_exclusion = NULL,
+    owner_land_use_area = user_land_use_area,
+    user_land_use_area = NULL,
+    owner_land_use = user_land_use,
+    user_land_use = NULL,
+    owner_land_activity = user_land_activity,
+    user_land_activity = NULL,
+    owner_application_status = user_application_status,
+    user_application_status = NULL,
+    owner_lfass_flag = user_lfass_flag,
+    user_lfass_flag = NULL,
+    claim_id = (CASE
+                    WHEN claim_id LIKE '%-01' THEN 'P' || TRIM('S'
+                                                               from claim_id) || TRIM(TRAILING '-01') || '-01'
+                    ELSE 'P' || TRIM('S'
+                                     from claim_id) || '-01'
+                END),
+    change_note = (CASE
+                       WHEN change_note LIKE '%record%' THEN 'S record moved from seasonal to permanent sheet based on LLO yes; '
+                       ELSE CONCAT(change_note, 'S record moved from seasonal to permanent sheet based on LLO yes and bps_claimed_area = 0; ')
+                   END)
+WHERE land_leased_out = 'Y'
+    AND user_land_use IS NOT NULL
+    AND user_bps_claimed_area = 0; --updates 378 records      
