@@ -2363,3 +2363,198 @@ SET owner_mlc_hahol_id = user_mlc_hahol_id,
 WHERE land_leased_out = 'Y'
     AND user_land_use IS NOT NULL
     AND user_bps_claimed_area = 0; --updates 378 records      
+
+-- FAILED make land_parcel_area match for hapar_ids and year (biggest diff is 6.07 ha but 99.6% are less than 0.5)
+WITH max_parcel AS
+    (SELECT hapar_id,
+            MAX(land_parcel_area) AS max_parcel
+     FROM final
+     WHERE hapar_id IN
+             (SELECT hapar_id
+              FROM
+                  (SELECT hapar_id,
+                          COUNT(*)
+                   FROM
+                       (SELECT hapar_id,
+                               land_parcel_area,
+                               COUNT(*)
+                        FROM final
+                        WHERE YEAR = 2016
+                        GROUP BY hapar_id,
+                                 land_parcel_area) foo
+                   GROUP BY hapar_id) bar
+              WHERE count > 1)
+         AND YEAR = 2016
+     GROUP BY hapar_id)
+UPDATE final AS f
+SET land_parcel_area = max_parcel,
+    change_note = CONCAT(f.change_note, 'adjust land_parcel_area to max(parcel) where different in same year; ')
+FROM max_parcel AS m 
+JOIN final USING (hapar_id)
+WHERE final.year = 2016 AND max_parcel <> final.land_parcel_area; -- updates 1,127 rows
+
+WITH max_parcel AS
+    (SELECT hapar_id,
+            MAX(land_parcel_area) AS max_parcel
+     FROM final
+     WHERE hapar_id IN
+             (SELECT hapar_id
+              FROM
+                  (SELECT hapar_id,
+                          COUNT(*)
+                   FROM
+                       (SELECT hapar_id,
+                               land_parcel_area,
+                               COUNT(*)
+                        FROM final
+                        WHERE YEAR = 2017
+                        GROUP BY hapar_id,
+                                 land_parcel_area) foo
+                   GROUP BY hapar_id) bar
+              WHERE count > 1)
+         AND YEAR = 2017
+     GROUP BY hapar_id)
+UPDATE final AS f
+SET land_parcel_area = m.max_parcel,
+    change_note = CONCAT(final.change_note, 'adjust land_parcel_area to max(parcel) where different in same year; ')
+FROM max_parcel AS m 
+JOIN final USING (hapar_id)
+WHERE final.year = 2017 AND max_parcel <> final.land_parcel_area; -- 814 rows
+
+WITH max_parcel AS
+    (SELECT hapar_id,
+            MAX(land_parcel_area) AS max_parcel
+     FROM final
+     WHERE hapar_id IN
+             (SELECT hapar_id
+              FROM
+                  (SELECT hapar_id,
+                          COUNT(*)
+                   FROM
+                       (SELECT hapar_id,
+                               land_parcel_area,
+                               COUNT(*)
+                        FROM final
+                        WHERE YEAR = 2018
+                        GROUP BY hapar_id,
+                                 land_parcel_area) foo
+                   GROUP BY hapar_id) bar
+              WHERE count > 1)
+         AND YEAR = 2018
+     GROUP BY hapar_id)
+UPDATE final AS f
+SET land_parcel_area = m.max_parcel,
+    change_note = CONCAT(final.change_note, 'adjust land_parcel_area to max(parcel) where different in same year; ')
+FROM max_parcel AS m 
+JOIN final USING (hapar_id)
+WHERE final.year = 2018 AND max_parcel <> final.land_parcel_area;
+
+-- deletes many to one (user to owner) claims - 4th joins
+WITH sclaims AS
+    (SELECT *
+     FROM
+         (SELECT claim_id_s,
+                 COUNT(*)
+          FROM
+              (SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+               FROM joined) foo
+          GROUP BY claim_id_s) bar
+     WHERE COUNT > 1)
+DELETE
+FROM joined
+WHERE SPLIT_PART(claim_id, ', ', 2) IN
+        (SELECT claim_id_s
+         FROM sclaims)
+    AND change_note LIKE '%4%'; -- deletes 1,093 rows
+
+WITH sclaims AS
+    (SELECT claim_id_s
+     FROM
+         (SELECT claim_id_s,
+                 join_no,
+                 ROW_NUMBER() OVER (PARTITION BY claim_id_s
+                                    ORDER BY join_no)
+          FROM
+              (SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s,
+                      LEFT(change_note, 1) AS join_no
+               FROM joined) foo) bar
+     WHERE ROW_NUMBER > 1
+     ORDER BY ROW_NUMBER DESC)
+DELETE
+FROM joined
+WHERE owner_land_leased_out = 'N'
+    AND SPLIT_PART(claim_id, ', ', 2) IN
+        (SELECT *
+         FROM sclaims) AND change_note NOT LIKE '%1%'; -- removes 494 rows
+
+SELECT * 
+FROM joined 
+WHERE owner_land_use IN (SELECT land_use FROM excl) AND user_bps_claimed_area <> 0         
+
+WITH joined_ids AS (
+SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+FROM joined)
+DELETE 
+FROM temp_seasonal AS t USING joined_ids AS a  
+WHERE t.claim_id_s = a.claim_id_s;
+
+
+
+--! these ones act good but some are owner_land_use_area + user_land_use_area = land_parcel_area 
+--! need to find a way to split these up 
+SELECT *
+FROM joined
+WHERE change_note LIKE '%4%'
+    AND (owner_land_use <> 'RGR'
+         AND user_land_use <> 'PGRS')
+    AND (owner_land_use <> 'PGRS'
+         AND user_land_use <> 'RGR')
+    AND (owner_land_use NOT LIKE '%TGRS%'
+         AND user_land_use NOT LIKE '%TGRS%')
+    AND (owner_land_use NOT IN
+             (SELECT land_use
+              FROM excl)
+         AND user_land_use NOT IN
+             (SELECT land_use
+              FROM excl))
+--    AND owner_land_use <> 'OVEG'
+--    AND owner_land_use <> 'ASSF'
+--    AND owner_land_use <> 'BSP'
+--    AND owner_land_use <> 'FALW'
+--    AND owner_land_use <> 'SB'
+    ORDER BY owner_land_use, user_land_use, hapar_id
+
+--TODO   should I make all excl land_use match verified exclusion unless where separated? (about 7k in perm)
+--TODO   look at LFASS flag where claim = 0
+
+--! need to combine same land_use year hapar_id -- no i dont because they're separated for a reason !
+WITH same_lu AS (
+    SELECT *
+    FROM
+        ( SELECT mlc_hahol_id,
+                habus_id,
+                hahol_id,
+                hapar_id,
+                land_parcel_area,
+                bps_eligible_area,
+                bps_claimed_area,
+                verified_exclusion,
+                land_use_area,
+                land_use,
+                land_activity,
+                application_status,
+                land_leased_out,
+                lfass_flag,
+                is_perm_flag,
+                claim_id_p,
+                year,
+                change_note,
+                ROW_NUMBER() OVER (PARTITION BY hapar_id,
+                                                land_use,
+                                                year, 
+                                                land_leased_out)
+        FROM temp_permanent ) foo
+    WHERE ROW_NUMBER > 1
+)
+
+
