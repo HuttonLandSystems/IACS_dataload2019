@@ -1,281 +1,50 @@
-/* Remaining problems
-1. Same land_use_claims in seasonal table associated with different businesses - only one with bps_claimed_area 0 and another with LLO yes          381266, 591113, 99299, 590132
-2. These might be different owners/rents Different land_use claims in seasonal table associated with different businesses - only with bps_claimed_area 0 and another with LLO yes         590224, 388042, 39194, 39273
-3. sum_bpc_claimed_area > land_parcel_area
-
-*/
-
---TODO where second join exists but third join is actually real (based on owner_land_use_area = user_land_use_area) hapar_id= 13916, 18209, 18785
-WITH sclaims AS
-    (SELECT *
-     FROM
-         (SELECT claim_id_s,
-                 COUNT(*)
-          FROM
-              (SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s,
-                      LEFT(change_note, 1) AS join_no
-               FROM joined) foo
-          GROUP BY claim_id_s) bar
-     WHERE COUNT > 1)
-SELECT *
-FROM joined
-WHERE SPLIT_PART(claim_id, ', ', 2) IN
-        (SELECT claim_id_s
-         FROM sclaims)
-    AND change_note NOT LIKE '%1%'
-    AND change_note NOT LIKE '%2%'
-ORDER BY hapar_id,
-         year
-
---* finds and sums difference in overclaims where bps_claimed_area > land_parcel_area for perm and seas table 
-SELECT sum(land_parcel_area - bps_claimed_area)
-FROM
-    (SELECT hapar_id,
-            year
-     FROM
-         (SELECT hapar_id,
-                 YEAR,
-                 sum_bps,
-                 land_parcel_area
-          FROM
-              (SELECT hapar_id,
-                      YEAR,
-                      sum(bps_claimed_area) AS sum_bps
-               FROM temp_seasonal
-               GROUP BY hapar_id,
-                        YEAR) foo
-          JOIN temp_seasonal USING (hapar_id,
-                                     YEAR)) bar
-     WHERE sum_bps > land_parcel_area
-     GROUP BY hapar_id,
-              year) foobar
-JOIN temp_seasonal USING (hapar_id,
-                           year);
-
---* finds and sums difference in SINGLE overclaims where bps_claimed_area > land_parcel_area for joined table
-SELECT hapar_id, YEAR, total_claimed_area - owner_land_parcel_area AS diff
-FROM
-    (SELECT hapar_id,
-            YEAR,
-            owner_land_parcel_area,
-            user_land_parcel_area,
-            owner_bps_claimed_area + user_bps_claimed_area AS total_claimed_area
-     FROM joined) foo
-WHERE total_claimed_area > owner_land_parcel_area
-    OR total_claimed_area > user_land_parcel_area
-    ORDER BY diff DESC;
-
-SELECT * 
-FROM temp_permanent
-WHERE hapar_id = 40016
-ORDER BY year
-
---* finds multiple businesses for same hapar, year
-SELECT *
-FROM
-    (SELECT habus_id,
-            hapar_id,
-            YEAR,
-            ROW_NUMBER() OVER (PARTITION BY hapar_id,
-                                            YEAR)
-     FROM temp_seasonal
-     GROUP BY habus_id,
-              hapar_id,
-              YEAR) foo
-WHERE ROW_NUMBER > 1
-
-
-
--- run all the way up to join 
--- check hapars 1144,1146,1725,1728
-    SELECT mlc_hahol_id, 
-           habus_id, 
-           hahol_id, 
-           hapar_id, 
-           land_parcel_area, 
-           bps_eligible_area,
-           bps_claimed_area, 
-           verified_exclusion, 
-           land_use_area, 
-           land_use, 
-           land_activity, 
-           application_status, 
-           land_leased_out, 
-           lfass_flag, 
-           is_perm_flag, 
-           claim_id_p, 
-           year, 
-           change_note, 
-           ROW_NUMBER() OVER (PARTITION BY hapar_id, land_use, year)
-    FROM temp_permanent
-    WHERE hapar_id > 1100
-ORDER BY hapar_id, year
-
-
-
-
--- check for 1st join (multiple owner claims to one renter)
-SELECT *
-FROM joined
-WHERE SPLIT_PART(claim_id, ', ', 1) IN
-        (SELECT claim_id_p
-         FROM
-             (SELECT claim_id_p,
-                     COUNT(*)
-              FROM
-                  (SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p
-                   FROM joined) bar
-              GROUP BY claim_id_p) foo
-         WHERE count > 1)
-    AND user_bps_claimed_area = 0
-    AND user_lfass_flag = 'N'; -- 789 rows
-
-
---! problems still exist: 
---! should there be joins with user_bps_claimed_area <> 0? 
---! What about where both owner_bps_claimed_area AND user_bps_claimed_area <> 0?
-
-
---!! DO THE stuff above this line
-
--- This code compares owner_land_parcel_area and user_land_parcel_area
---TODO
-SELECT hapar_id,
-       sum_owner,
-       sum_user,
-       CASE
-           WHEN sum_owner > sum_user THEN sum_owner - sum_user
-           WHEN sum_user > sum_owner THEN sum_user - sum_owner
-       END AS diff,
-       year
-FROM
-    (SELECT hapar_id,
-            year,
-            sum(owner_land_parcel_area) AS sum_owner,
-            sum(user_land_parcel_area) AS sum_user
-     FROM joined
-     GROUP BY hapar_id, year) foo
-WHERE sum_owner <> sum_user
-ORDER BY diff DESC
-
--- This code compares owner_bps_eligible_area and user_bps_eligible_area
--- not a problem
-SELECT hapar_id,
-       sum_owner,
-       sum_user,
-       CASE
-           WHEN sum_owner > sum_user THEN sum_owner - sum_user
-           WHEN sum_user > sum_owner THEN sum_user - sum_owner
-       END AS diff,
-       year
-FROM
-    (SELECT hapar_id,
-            year,
-            sum(owner_bps_eligible_area) AS sum_owner,
-            sum(user_bps_eligible_area) AS sum_user
-     FROM joined
-     GROUP BY hapar_id, year) foo
-WHERE sum_owner <> sum_user
-ORDER BY diff DESC
-
--- This code finds overclaims // sum_bpc_claimed_area > land_parcel_area
-SELECT *
-FROM
-    (SELECT mlc_hahol_id,
-            habus_id,
-            hapar_id,
-            year,
-            land_parcel_area,
-            sum(bps_claimed_area) AS sum_bps
-     FROM temp_permanent
-     GROUP BY mlc_hahol_id,
-              habus_id,
-              hapar_id,
-              land_parcel_area,
-              year) foo
-WHERE land_parcel_area < sum_bps 
-
--- this code checks for instances where land_parcel_area is different from land_use_area
-SELECT *
-FROM
-    (SELECT hapar_id,
-            year,
-            (owner_land_parcel_area/owner_land_use_area) AS percent_right
-     FROM joined
-     WHERE owner_land_use_area > owner_land_parcel_area) foo
-ORDER BY percent_right 
-
-SELECT *
-FROM
-    (SELECT hapar_id,
-            year,
-            (user_land_parcel_area/user_land_use_area) AS percent_right
-     FROM joined
-     WHERE user_land_use_area > user_land_parcel_area) foo
-ORDER BY percent_right 
-
---This code checks to see if land_parcel_area is the same for each year
-SELECT *
-FROM
-    (SELECT hapar_id,
-            YEAR,
-            row_number() OVER (PARTITION BY hapar_id,
-                                            YEAR,
-                                            user_land_parcel_area)
-     FROM
-         (SELECT hapar_id,
-                 YEAR,
-                 user_land_parcel_area
-          FROM joined
-          GROUP BY hapar_id,
-                   YEAR,
-                   user_land_parcel_area) foo) foo2
-WHERE ROW_NUMBER > 1
-
---This code finds differences in land_parcel_area in same year 
-SELECT *
-FROM
-    (SELECT hapar_id,
-            max_parcel,
-            min_parcel,
-            max_parcel - min_parcel AS diff
-     FROM
-         (SELECT hapar_id,
-                 MAX(land_parcel_area) AS max_parcel,
-                 MIN(land_parcel_area) AS min_parcel
-          FROM final
-          WHERE hapar_id IN
-                  (SELECT hapar_id
-                   FROM
-                       (SELECT hapar_id,
-                               COUNT(*)
-                        FROM
-                            (SELECT hapar_id,
-                                    land_parcel_area,
-                                    COUNT(*)
-                             FROM final
-                             WHERE YEAR = 2017
-                             GROUP BY hapar_id,
-                                      land_parcel_area) foo
-                        GROUP BY hapar_id) bar
-                   WHERE count > 1)
-              AND YEAR = 2017
-          GROUP BY hapar_id) foobar) foo2
-ORDER BY diff DESC
+All code moved to removed.sql 
 
 --TODO  This code finds digi_area used in join aka proportion of good area for one year
--- 5,130,084/6,476,784 hectares = 79.2% of 2018 parcels (area)
--- 5,074,587/6,479,879 hectares = 78.3% of 2019 parcels (area)
+-- 5,123,636/6,479,357 hectares = 79.0% of 2017 parcels (area)
+SELECT SUM(digi_area) FROM
+    (SELECT hapar_id, digi_area
+     FROM ladss.snapshot_2017
+     JOIN final AS l USING (hapar_id)
+     WHERE l.YEAR = 2016
+     GROUP BY hapar_id, digi_area) foo
+
+-- 5,129,263/6,476,784 hectares = 79.2% of 2018 parcels (area)
+SELECT SUM(digi_area) FROM
+    (SELECT hapar_id, digi_area
+     FROM rpid.lpis_land_parcels_2018_jhi_deliv20190911
+     JOIN final AS l USING (hapar_id)
+     WHERE l.YEAR = 2017
+     GROUP BY hapar_id, digi_area) foo
+
+-- 5,073,818/6,479,879 hectares = 78.3% of 2019 parcels (area)
 SELECT SUM(digi_area) FROM
     (SELECT hapar_id, digi_area
      FROM rpid.lpis_land_parcels_2019_jhi_deliv20190911
-     JOIN ladss.saf_iacsprelim_2019 AS l USING (hapar_id)
+     JOIN final AS l USING (hapar_id)
      WHERE l.YEAR = 2018
      GROUP BY hapar_id, digi_area) foo
 
--- ORIGINAL DATA   
+--* ORIGINAL DATA   
+-- 5,213,085/6,479,357 hectares = 80.5% of 2017 parcels (area)
+SELECT SUM(digi_area)
+FROM
+    (SELECT hapar_id,
+            digi_area
+     FROM ladss.snapshot_2017
+     JOIN
+         (SELECT DISTINCT hapar_id
+          FROM
+              (SELECT DISTINCT hapar_id
+               FROM rpid.saf_permanent_land_parcels_deliv20190911
+               WHERE YEAR = 2016
+               UNION SELECT DISTINCT hapar_id
+               FROM rpid.saf_seasonal_land_parcels_deliv20190911
+               WHERE YEAR = 2016) foo) bar USING (hapar_id)
+     GROUP BY hapar_id,
+              digi_area) foobar
+
 -- 5,236,722/6,476,784 hectares = 80.9% of 2018 parcels (area)
--- 5,226,963/6,479,879 hectares = 80.7% of 2019 parcels (area)
 SELECT SUM(digi_area)
 FROM
     (SELECT hapar_id,
@@ -293,6 +62,25 @@ FROM
      GROUP BY hapar_id,
               digi_area) foobar
 
+-- 5,226,963/6,479,879 hectares = 80.7% of 2019 parcels (area)
+SELECT SUM(digi_area)
+FROM
+    (SELECT hapar_id,
+            digi_area
+     FROM rpid.lpis_land_parcels_2019_jhi_deliv20190911
+     JOIN
+         (SELECT DISTINCT hapar_id
+          FROM
+              (SELECT DISTINCT hapar_id
+               FROM rpid.saf_permanent_land_parcels_deliv20190911
+               WHERE YEAR = 2018
+               UNION SELECT DISTINCT hapar_id
+               FROM rpid.saf_seasonal_land_parcels_deliv20190911
+               WHERE YEAR = 2018) foo) bar USING (hapar_id)
+     GROUP BY hapar_id,
+              digi_area) foobar
+
+--  5,123,636/5,213,085 = 98.3% 2017
 --  5,130,084/5,236,722 = 98.0% 2018
 --  5,074,587/5,226,963 = 97.1% 2019     
 
@@ -303,7 +91,7 @@ SELECT hapar_id
 FROM rpid.lpis_land_parcels_2019_jhi_deliv20190911
 EXCEPT
 SELECT hapar_id
-FROM ladss.saf_iacsprelim_2019 AS l
+FROM final AS l
 WHERE l.YEAR = 2018
 
 -- ORIGINAL DATA      
@@ -329,42 +117,4 @@ EXCEPT
 --TODO types of land use categoriezed 
 --TODO number seasonal renters 
 
-
--- This code finds duplicate land use codes  
--- not a problem
-SELECT *
-FROM 
-    (SELECT hapar_id, 
-            year, 
-            COUNT(Distinct land_use) as dupes, 
-            COUNT(land_use) as lu_count, 
-            SUM(land_use_area) as sum_lu 
-     FROM temp_seasonal 
-     GROUP BY hapar_id, 
-              year) foo 
-WHERE dupes <> lu_count 
-ORDER BY lu_count DESC, 
-         dupes DESC 
-
---! Look at these Doug
-SELECT * 
-FROM temp_seasonal 
-WHERE hapar_id = 85859 -- so many claims? so many businesses? also these: 83863, 242798
---! look at spatial
-
---weird case with 36 ha of BUILDING and no matching land_uses
-SELECT * 
-FROM rpid.saf_permanent_land_parcels_deliv20190911 splpd
-WHERE hapar_id = 212811  AND YEAR = 2017
-UNION 
-SELECT * 
-FROM rpid.saf_seasonal_land_parcels_deliv20190911 sslpd
-WHERE hapar_id = 212811 AND YEAR = 2017
-ORDER BY YEAR, is_perm_flag
-
--- good example to catch PGRS - RGR subdivision by user 369777, 1144
-
--- problems joins 40016, 401109 (two businesses claiming same piece)
-
---! merge same land_use 
 

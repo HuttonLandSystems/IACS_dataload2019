@@ -1,74 +1,65 @@
-/*--*2019 Data Load
-1. Create temp tables, remove select rows, add select columns
-        dropped columns: payment_region, organic_status
-        dropped data: all year 2019 data, ((land_use = 'EXCL' OR land_use = 'DELETED_LANDUSE') AND (land_use_area = 0 OR land_use_area IS NULL)), 
-                      duplicate records from payment_region, NULL hapar_id and land_use = ' ', application_status LIKE 'Wait for Dealine/Inspection' or 'Wait for Land Change'
-        recast claim_id column to accept multiple values
-        rename claim_id_p/s so no problems with unique ids between tables
 
-2. Fix land_parcel_area IS NULL/0
-        infer land_parcel_area from same hapar_id
-        infer land_parcel_area from land_use_area in same row
-        delete where land_parcel_area IS NULL/0 AND land_use_area = 0
-
-3. Fix land_use_area IS NULL or 0
-        copy land_parcel_area for single claims where land_parcel_area = bps_eligible_area
-        update NULL/0 land_use_areas with inferred values from other years whre same land_use
-        adjust land_use_area to match bps_claimed_area
-        adjust bps_claimed_area to match land_parcel_area WHERE bps_claimed_area > land_parcel_area
-        delete remaining NULL land_use_area
-   
-4. Joins 
-        first join on hapar_id, year, land_use, land_use_area
-            delete from original table where join above
-        second join on hapar_id, year, land_use 
-            delete from original table where join above 
-        third join on hapar_id, year, land_use_area 
-            delete from original table where join above
-        fourth join on hapar_id, year 
-            delete from original table where join above
-
-5. Clean up
-    move leftover mutually exclusive ones to diff tables 
-    find owners based on LLO flag and change them from user to owner from mutually exclusive table
-    Assumes land_parcel_area = owner_land_parcel when owner > user
-    Assumes land_parcel_area = user_land_parcel when user > owner 
-    Assumes bps_eligible_area = owner_bps_eligible_area when owner > user 
-    Assumes bps_eligible_area = user_bps_eligible_area when user > owner 
-    Assumes verified_exclusion = owner_verified_exclusion when owner > user
-    Assumes verified_exclusion = user_verified_exclusion when user > owner
-    Assumes user_land_activity is more correct when no match
-    Assumes if either owner or renter has application_status = ‘under action/assessment’ then it is  
-
-6. Combine ALL into final table
-    Infer NON-SAF renter where LLO yes 
-    Infer NON-SAF owner for mutually exclusive users 
-
-*/
+--*Step 1. Create temp tables, remove select rows, add select columns
+-- DROPPED COLUMNS: payment_region, organic_status
+-- DROPPED DATA: all year 2019 data, ((land_use = 'EXCL' OR land_use = 'DELETED_LANDUSE') AND (land_use_area = 0 OR land_use_area IS NULL)), 
+--               duplicate records from payment_region, NULL hapar_id and land_use = ' '
+-- recast claim_id column to accept multiple values
+-- rename claim_id_p/s so no problems with unique ids between tables
 -- create a table for excluded land use codes for use later
-DROP TABLE IF EXISTS excl;
-CREATE TEMP TABLE excl (land_use VARCHAR(30),
-                                 descript VARCHAR(30));
 
-INSERT INTO excl (land_use, descript)
-VALUES ('BLU-GLS', 'Blueberries - glasshouse'), 
-       ('BRA', 'Bracken'), 
-       ('BUI', 'Building'), 
-       ('EXCL','Generic exclusion'),
-       ('FSE', 'Foreshore'), 
-       ('GOR', 'Gorse'), 
-       ('LLO', 'Land let out'), 
-       ('MAR', 'Marsh'), 
-       ('RASP-GLS', 'Raspberries - glasshouse'), 
-       ('ROAD', 'Road'), 
-       ('ROK', 'Rocks'), 
-       ('SCB', 'Scrub'), 
-       ('SCE', 'Scree'), 
-       ('STRB-GLS', 'Strawberries - glasshouse'), 
-       ('TOM-GLS', 'Tomatoes - glasshouse'), 
-       ('TREE', 'Trees'),
-       ('TREES', 'Trees'), 
-       ('WAT', 'Water');
+--*Step 2. Fix land_parcel_area IS NULL or 0
+-- infer land_parcel_area where same hapar_id in different year 
+-- infer land_parcel_area from land_use_area in same row
+-- delete where land_parcel_area IS NULL/0 AND land_use_area = 0
+
+--*Step 3. Fix land_use_area IS NULL or 0 
+-- copy land_parcel_area for single claims where land_parcel_area = bps_eligible_area
+-- copy values from other years where same land_use
+-- adjust bps_claimed_area to match land_parcel_area WHERE bps_claimed_area > land_parcel_area
+-- adjust land_use_area to match bps_claimed_area
+-- delete remaining NULL land_use_area
+
+--*Step 4. Join
+-- first join on hapar_id, year, land_use, land_use_area
+--      delete from original table where perfect join above
+-- second join on hapar_id, year, land_use 
+-- third join on hapar_id, year, land_use_area
+-- fourth join on hapar_id, year 
+-- deletes problem fourth joins based on specific criteria
+-- delete from original table where join above
+
+--*STEP 5. Clean up 
+-- move leftover mutually exclusive ones to diff tables 
+
+--*Step 6. Combine ALL rows into final table
+-- mark rows in joined where owner_land_parcel_area <> user_land_parcel_area
+-- mark rows in joined where owner_bps_eligible_area <> user_bps_eligible_area
+-- mark rows in joined where owner_verified_exclusion <> user_verified_exclusion
+-- mark rows in joined where owner_land_activity <> user_land_activity 
+-- mark rows in joined where owner_application_status <> user_application_status
+-- move joined data into last table
+-- infer NON-SAF renter where LLO yes 
+-- infer NON-SAF owner for mutually exclusive users
+-- delete zero excluded land use
+-- make land_parcel_area match for hapar_ids and year
+
+--*STEP 7: Mark remaining errors // in order of frequency ASC
+-- alter table: add error_log to count things that are wrong 
+-- error: owner_hahol_id <> user_hahol_id
+-- error: multiple permanent businesses declaring on same hapar_id
+-- error: sum(owner_land_parcel_area) <> sum(user_land_parcel_area)
+-- error: sum(owner_bps_eligible_area) <> sum(user_bps_eligible_area)
+-- error: doubled user claims in join (one to many)
+-- error: seasonal renter with LLO yes
+-- error: doubled owner claims in join (many to one)
+-- error: multiple seasonal businesses declaring on same hapar_id
+-- error: owner_land_use <> user_land_use
+-- error: sum(land_use_area) > land_parcel_area
+-- error: sum(bps_claimed_area) > land_parcel_area
+
+--*STEP 8: create final table 
+--------------------------------------------------------------------------------------------------------------------------------------------
+
 
 --*Step 1. Create temp tables, remove select rows, add select columns
 -- DROPPED COLUMNS: payment_region, organic_status
@@ -270,6 +261,31 @@ UPDATE temp_seasonal
 SET claim_id_s = 'S' || claim_id_s
 WHERE claim_id_s NOT LIKE '%S%';
 
+-- create a table for excluded land use codes for use later
+DROP TABLE IF EXISTS excl;
+CREATE TEMP TABLE excl (land_use VARCHAR(30),
+                                 descript VARCHAR(30));
+
+INSERT INTO excl (land_use, descript)
+VALUES ('BLU-GLS', 'Blueberries - glasshouse'), 
+       ('BRA', 'Bracken'), 
+       ('BUI', 'Building'), 
+       ('EXCL','Generic exclusion'),
+       ('FSE', 'Foreshore'), 
+       ('GOR', 'Gorse'), 
+       ('LLO', 'Land let out'), 
+       ('MAR', 'Marsh'), 
+       ('RASP-GLS', 'Raspberries - glasshouse'), 
+       ('ROAD', 'Road'), 
+       ('ROK', 'Rocks'), 
+       ('SCB', 'Scrub'), 
+       ('SCE', 'Scree'), 
+       ('STRB-GLS', 'Strawberries - glasshouse'), 
+       ('TOM-GLS', 'Tomatoes - glasshouse'), 
+       ('TREE', 'Trees'),
+       ('TREES', 'Trees'), 
+       ('WAT', 'Water');
+
 --*Step 2. Fix land_parcel_area IS NULL or 0
 --infer land_parcel_area where same hapar_id in different year 
 UPDATE temp_permanent AS t
@@ -368,7 +384,7 @@ WHERE temp_seasonal.hapar_id = sub.hapar_id
     AND temp_seasonal.year = sub.year
     AND temp_seasonal.land_parcel_area = temp_seasonal.bps_eligible_area; -- updates 842 rows 
 
--- Copy values from other years where same land_use
+-- copy values from other years where same land_use
 WITH sub1 AS
     (SELECT *
      FROM
@@ -469,7 +485,7 @@ DELETE FROM
 temp_seasonal
 WHERE land_use_area IS NULL; --deletes 1,168 rows
 
---*Step 5. Join
+--*Step 4. Join
 --first join on hapar_id, year, land_use, land_use_area
 DROP TABLE IF EXISTS joined;
 SELECT * INTO TEMP TABLE joined
@@ -505,13 +521,13 @@ FROM
             year,
             CASE
                 WHEN p.change_note IS NOT NULL
-                     AND s.change_note IS NOT NULL THEN CONCAT('1first join; ', p.change_note, s.change_note)
+                     AND s.change_note IS NOT NULL THEN CONCAT('first join; ', p.change_note, s.change_note)
                 WHEN p.change_note IS NULL
-                     AND s.change_note IS NOT NULL THEN CONCAT('1first join; ', s.change_note)
+                     AND s.change_note IS NOT NULL THEN CONCAT('first join; ', s.change_note)
                 WHEN s.change_note IS NULL
-                     AND p.change_note IS NOT NULL THEN CONCAT('1first join; ', p.change_note)
+                     AND p.change_note IS NOT NULL THEN CONCAT('first join; ', p.change_note)
                 WHEN p.change_note IS NULL
-                     AND s.change_note IS NULL THEN '1first join; '
+                     AND s.change_note IS NULL THEN 'first join; '
             END AS change_note
      FROM temp_permanent AS p
      JOIN temp_seasonal AS s USING (hapar_id,
@@ -530,7 +546,6 @@ FROM joined)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
 WHERE t.claim_id_p = a.claim_id_p; -- 33,108 rows
---! this means there are duplicate owners but not renters - check
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p,
@@ -573,13 +588,13 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        year,
        CASE
            WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT('2second join; ', p.change_note, s.change_note)
+                AND s.change_note IS NOT NULL THEN CONCAT('second join; ', p.change_note, s.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN CONCAT('2second join; ', s.change_note)
+                AND s.change_note IS NOT NULL THEN CONCAT('second join; ', s.change_note)
            WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN CONCAT('2second join; ', p.change_note)
+                AND p.change_note IS NOT NULL THEN CONCAT('second join; ', p.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN '2second join; '
+                AND s.change_note IS NULL THEN 'second join; '
        END AS change_note 
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
@@ -623,13 +638,13 @@ SELECT p.mlc_hahol_id AS owner_mlc_hahol_id,
        year,
        CASE
            WHEN p.change_note IS NOT NULL
-                AND s.change_note IS NOT NULL THEN CONCAT('3third join; ', p.change_note, s.change_note)
+                AND s.change_note IS NOT NULL THEN CONCAT('third join; ', p.change_note, s.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NOT NULL THEN CONCAT('3third join; ', s.change_note)
+                AND s.change_note IS NOT NULL THEN CONCAT('third join; ', s.change_note)
            WHEN s.change_note IS NULL
-                AND p.change_note IS NOT NULL THEN CONCAT('3third join; ', p.change_note)
+                AND p.change_note IS NOT NULL THEN CONCAT('third join; ', p.change_note)
            WHEN p.change_note IS NULL
-                AND s.change_note IS NULL THEN '3third join; '
+                AND s.change_note IS NULL THEN 'third join; '
        END AS change_note 
 FROM temp_permanent AS p
 JOIN temp_seasonal AS s USING (hapar_id,
@@ -673,13 +688,13 @@ WITH all_joined AS
             year,
             CASE
                 WHEN p.change_note IS NOT NULL
-                     AND s.change_note IS NOT NULL THEN CONCAT('4fourth join; ', p.change_note, s.change_note)
+                     AND s.change_note IS NOT NULL THEN CONCAT('fourth join; ', p.change_note, s.change_note)
                 WHEN p.change_note IS NULL
-                     AND s.change_note IS NOT NULL THEN CONCAT('4fourth join; ', s.change_note)
+                     AND s.change_note IS NOT NULL THEN CONCAT('fourth join; ', s.change_note)
                 WHEN s.change_note IS NULL
-                     AND p.change_note IS NOT NULL THEN CONCAT('4fourth join; ', p.change_note)
+                     AND p.change_note IS NOT NULL THEN CONCAT('fourth join; ', p.change_note)
                 WHEN p.change_note IS NULL
-                     AND s.change_note IS NULL THEN '4fourth join; '
+                     AND s.change_note IS NULL THEN 'fourth join; '
             END AS change_note
      FROM temp_permanent AS p
      JOIN temp_seasonal AS s USING (hapar_id,
@@ -694,7 +709,7 @@ WHERE claim_id NOT IN
 -- deletes problem fourth joins based on specific criteria
 DELETE
 FROM joined
-WHERE change_note LIKE '%4%'
+WHERE change_note LIKE '%fourth join%'
     AND ((owner_land_use IN
               (SELECT land_use
                FROM excl)
@@ -725,7 +740,7 @@ DELETE
 FROM temp_seasonal AS t USING joined_ids AS a  
 WHERE t.claim_id_s = a.claim_id_s; -- 23,492 rows 
 
---*STEP 6. Clean up 
+--*STEP 5. Clean up 
 --move leftover mutually exclusive ones to diff tables 
 DROP TABLE IF EXISTS combine; 
 SELECT mlc_hahol_id AS owner_mlc_hahol_id,
@@ -793,10 +808,10 @@ SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
        change_note
 FROM temp_seasonal; --last 115,110 rows
 
---DROP TABLE temp_permanent; 
---DROP TABLE temp_seasonal;
+DROP TABLE temp_permanent; 
+DROP TABLE temp_seasonal;
 
---*Step 7. Combine ALL rows into final table
+--*Step 6. Combine ALL rows into final table
 DROP TABLE IF EXISTS final;
 CREATE TEMP TABLE final AS
 SELECT owner_mlc_hahol_id,
@@ -832,7 +847,7 @@ SELECT owner_mlc_hahol_id,
            WHEN owner_application_status IS NULL THEN user_application_status
            WHEN user_application_status IS NULL THEN owner_application_status
        END AS application_status,
-       owner_land_leased_out, --! owner or user land_leased_out? CASE WHEN owner_land_leased_out iS NULL... 
+       owner_land_leased_out, 
        user_land_leased_out, 
        owner_lfass_flag,
        user_lfass_flag,
@@ -841,7 +856,6 @@ SELECT owner_mlc_hahol_id,
        change_note
 FROM combine; -- moves 1,957,813 rows
 
---! look at spatial data 
 --mark rows in joined where owner_land_parcel_area <> user_land_parcel_area
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume land_parcel_area = owner_land_parcel_area when owner > user; ')
@@ -876,7 +890,7 @@ WHERE owner_land_activity <> user_land_activity; -- updates 40,793 rows
 
 --mark rows in joined where owner_application_status <> user_application_status
 UPDATE joined
-SET change_note = CONCAT(change_note, 'application status assumed under action/assessment if either owner or user; ')
+SET change_note = CONCAT(change_note, 'application status assumed under action/assessment if either owner or user says so; ')
 WHERE (owner_application_status LIKE '%Action%'
        OR user_application_status LIKE '%Action')
     AND owner_application_status <> user_application_status; -- updates 1,257 rows
@@ -894,19 +908,22 @@ SELECT owner_mlc_hahol_id,
            WHEN owner_land_parcel_area > user_land_parcel_area THEN owner_land_parcel_area
            WHEN user_land_parcel_area > owner_land_parcel_area THEN user_land_parcel_area
            ELSE owner_land_parcel_area
-       END AS land_parcel_area, --changes 321 rows with than 5.77 ha change -- NEED TO UPDATE
+       END AS land_parcel_area, --changes 346 rows with largest change = 5.77 ha
+       -- total change = 79.63
        CASE 
             WHEN owner_bps_eligible_area > user_bps_eligible_area THEN owner_bps_eligible_area 
             WHEN user_bps_eligible_area > owner_bps_eligible_area THEN user_bps_eligible_area
             ELSE owner_bps_eligible_area
-        END AS bps_eligible_area, --changes 398 rows with than 273.3 ha change-- NEED TO UPDATE
+        END AS bps_eligible_area, --changes 414 rows with largest change = 273.3 ha
+        -- total change = 797.27
        owner_bps_claimed_area,
        user_bps_claimed_area,
        CASE 
             WHEN owner_verified_exclusion > user_verified_exclusion THEN owner_verified_exclusion
             WHEN user_verified_exclusion > owner_verified_exclusion THEN user_verified_exclusion
             ELSE owner_verified_exclusion
-        END AS verified_exclusion, --changes 3,810 rows with 4,208.76 ha change-- NEED TO UPDATE
+        END AS verified_exclusion, --changes 4,670 rows with largest change = 4,208.76 ha
+        -- total change = 50,680.66
        owner_land_use_area,
        user_land_use_area,
        owner_land_use,
@@ -916,15 +933,15 @@ SELECT owner_mlc_hahol_id,
             WHEN user_land_activity = '' THEN owner_land_activity 
             WHEN (user_land_activity = 'No Activity' OR user_land_activity = 'Unspecified') AND owner_land_activity <> '' THEN owner_land_activity
             ELSE user_land_activity
-        END AS land_activity, --changes 38,804 rows -- NEED TO UPDATE
+        END AS land_activity, --changes 40,793 rows 
        CASE 
             WHEN owner_application_status = user_application_status THEN owner_application_status
             WHEN owner_application_status LIKE '%Action%' AND owner_application_status <> user_application_status THEN owner_application_status
             WHEN user_application_status LIKE '%Action%' AND owner_application_status <> user_application_status THEN user_application_status 
             ELSE owner_application_status
-        END AS application_status, --changes 1,048 rows-- NEED TO UPDATE
+        END AS application_status, --changes 1,789 rows
        owner_land_leased_out,
-       user_land_leased_out,  --! decide on land_leased_out
+       user_land_leased_out, 
        owner_lfass_flag,
        user_lfass_flag,
        claim_id,
@@ -932,7 +949,7 @@ SELECT owner_mlc_hahol_id,
        change_note
 FROM joined; -- moves 59,558 rows 
 
---infer NON-SAF renter where LLO yes 
+-- infer NON-SAF renter where LLO yes 
 UPDATE final
 SET user_land_use = 'NON_SAF',
     change_note = CONCAT(change_note, 'infer non-SAF renter; ')
@@ -942,7 +959,7 @@ WHERE user_habus_id IS NULL
         (SELECT land_use
          FROM excl); --updates 6,698 rows
 
---infer NON-SAF owner for mutually exclusive users
+-- infer NON-SAF owner for mutually exclusive users
 UPDATE final
 SET owner_land_use = 'NON_SAF',
     change_note = CONCAT(change_note, 'infer non-SAF owner; ')
@@ -966,7 +983,7 @@ WHERE owner_land_use_area = 0
         (SELECT land_use
          FROM excl); -- 262 rows
 
--- make land_parcel_area match for hapar_ids and year (biggest diff is 6.07 ha but 99.6% are less than 0.5)
+-- make land_parcel_area match for hapar_ids and year (biggest diff is 2.35 ha but 98.6% are less than 0.5)
 UPDATE final AS f
 SET land_parcel_area = max_parcel,
     change_note = CONCAT(f.change_note, 'adjust land_parcel_area to max(parcel) where different in same year; ')
@@ -984,21 +1001,217 @@ WHERE f.hapar_id = final.hapar_id
     AND f.year = final.year
     AND max_parcel <> min_parcel
     AND final.land_parcel_area <> max_parcel; -- updates 889 rows
-    
--- match NON_SAF owners where other land_use exists for that year 224600, 212811, 178656, 229246, 230767
 
--- match owner_hahol_id and user_hahol_id 
+--*STEP 7: Mark remaining errors // in order of frequency ASC
+-- alter table: add error_log to count things that are wrong 
+ALTER TABLE final ADD error_log VARCHAR;
 
--- make table for Doug hapar_ids in year 2018
-CREATE TABLE ladss.FIDS2018 AS
-    (SELECT distinct hapar_id
-     FROM final
-     WHERE year = 2018)
+--owner_hahol_id <> user_hahol_id
+UPDATE FINAL AS f
+SET error_log = CONCAT(f.error_log, 'owner_hahol_id <> user_hahol_id; ')
+WHERE owner_hahol_id <> user_hahol_id; -- 54 rows 
 
+--multiple permanent businesses declaring on same hapar_id
+UPDATE final AS f
+SET error_log = CONCAT(f.error_log, 'multiple permanent businesses declaring on same hapar_id; ')
+FROM
+    (SELECT hapar_id,
+            YEAR,
+            COUNT(DISTINCT owner_habus_id)
+     FROM FINAL
+     WHERE owner_habus_id IS NOT NULL
+     GROUP BY hapar_id,
+              YEAR
+     ORDER BY count DESC) AS mult_seas
+WHERE f.hapar_id = mult_seas.hapar_id
+    AND f.year = mult_seas.year
+    AND count > 1; -- 185 rows
 
---TODO make the joins pretty again aka get rid of the numbers 
+-- sum(owner_land_parcel_area) <> sum(user_land_parcel_area)
+UPDATE final AS f
+SET error_log = CONCAT(f.error_log, 'sum(owner_land_parcel_area) <> sum(user_land_parcel_area); ')
+FROM
+    (SELECT hapar_id,
+            year,
+            sum_owner,
+            sum_user
+     FROM
+         (SELECT hapar_id,
+                 year,
+                 sum(owner_land_parcel_area) AS sum_owner,
+                 sum(user_land_parcel_area) AS sum_user
+          FROM joined
+          GROUP BY hapar_id,
+                   year) foo
+     WHERE sum_owner <> sum_user ) bar
+JOIN final USING (hapar_id,
+                  year)
+WHERE f.hapar_id = final.hapar_id
+    AND f.year = final.year
+    AND sum_owner <> sum_user;-- 342 rows
 
---TODO make error_log 
+-- sum(owner_bps_eligible_area) <> sum(user_bps_eligible_area)
+UPDATE final AS f
+SET error_log = CONCAT(f.error_log, 'sum(owner_bps_eligible_area) <> sum(user_bps_eligible_area); ')
+FROM
+    (SELECT hapar_id,
+            year,
+            sum_owner,
+            sum_user
+     FROM
+         (SELECT hapar_id,
+                 year,
+                 sum(owner_bps_eligible_area) AS sum_owner,
+                 sum(user_bps_eligible_area) AS sum_user
+          FROM joined
+          GROUP BY hapar_id,
+                   year) foo
+     WHERE sum_owner <> sum_user ) bar
+JOIN final USING (hapar_id,
+                  year)
+WHERE f.hapar_id = final.hapar_id
+    AND f.year = final.year
+    AND sum_owner <> sum_user;-- 409 rows    
+
+-- doubled user claims in join (one to many)
+UPDATE final AS f 
+SET error_log = CONCAT(error_log, 'doubled user claims in join (one to many); ')
+FROM (
+SELECT *
+FROM
+    (SELECT hapar_id,
+            YEAR,
+            claim_id_s,
+            COUNT(*)
+     FROM
+         (SELECT hapar_id,
+                 year,
+                 SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
+          FROM final
+          WHERE change_note LIKE '%join%') foo
+     GROUP BY hapar_id,
+              YEAR,
+              claim_id_s) bar
+WHERE count > 2) foobar 
+WHERE SPLIT_PART(f.claim_id, ', ', 2) = claim_id_s; -- 1,181 rows       
+
+--seasonal renter with LLO yes
+UPDATE final AS f
+SET error_log = CONCAT(error_log, 'seasonal renter with LLO yes; ')
+WHERE user_land_leased_out = 'Y';-- 1,866 rows
+
+-- doubled owner claims in join (many to one)
+UPDATE final AS f 
+SET error_log = CONCAT(error_log, 'doubled owner claims in join (many to one); ')
+FROM (
+SELECT *
+FROM
+    (SELECT hapar_id,
+            YEAR,
+            claim_id_p,
+            COUNT(*)
+     FROM
+         (SELECT hapar_id,
+                 year,
+                 SPLIT_PART(claim_id, ', ', 1) AS claim_id_p
+          FROM final
+          WHERE change_note LIKE '%join%') foo
+     GROUP BY hapar_id,
+              YEAR,
+              claim_id_p) bar
+WHERE count > 1) foobar 
+WHERE SPLIT_PART(f.claim_id, ', ', 1) = claim_id_p; -- 6,677 rows
+
+--multiple seasonal businesses declaring on same hapar_id
+UPDATE final AS f
+SET error_log = CONCAT(f.error_log, 'multiple seasonal businesses declaring on same hapar_id; ')
+FROM
+    (SELECT hapar_id,
+            YEAR,
+            COUNT(DISTINCT user_habus_id)
+     FROM FINAL
+     WHERE user_habus_id IS NOT NULL
+     GROUP BY hapar_id,
+              YEAR
+     ORDER BY count DESC) AS mult_seas
+WHERE f.hapar_id = mult_seas.hapar_id
+    AND f.year = mult_seas.year
+    AND count > 1; -- 6,018 rows
+
+--owner_land_use <> user_land_use
+UPDATE final AS f
+SET error_log = CONCAT(f.error_log, 'owner_land_use <> user_land_use; ')
+WHERE owner_land_use <> user_land_use
+    AND owner_land_use NOT IN
+        (SELECT land_use
+         FROM excl)
+    AND user_land_use NOT IN
+        (SELECT land_use
+         FROM excl); -- 8,385 rows
+
+--sum(land_use_area) > land_parcel_area
+UPDATE final AS f
+SET error_log = CONCAT(f.error_log, 'sum(land_use_area) > land_parcel_area; ')
+FROM
+    ( SELECT hapar_id,
+             YEAR,
+             sum,
+             land_parcel_area
+     FROM
+         (SELECT hapar_id,
+                 YEAR,
+                 sum(all_bps)
+          FROM
+              (SELECT hapar_id,
+                      YEAR,
+                      CASE
+                          WHEN owner_land_use_area IS NULL THEN user_land_use_area
+                          WHEN user_land_use_area IS NULL THEN owner_land_use_area
+                          ELSE owner_land_use_area
+                      END AS all_bps
+               FROM FINAL) foo
+          GROUP BY hapar_id,
+                   YEAR) bar
+JOIN FINAL USING (hapar_id,
+                  year)) final
+WHERE f.hapar_id = final.hapar_id
+    AND f.year = final.year 
+    AND sum > final.land_parcel_area; -- 17,363 rows         
+
+--sum(bps_claimed_area) > land_parcel_area
+UPDATE final AS f
+SET error_log = CONCAT(f.error_log, 'sum(bps_claimed_area) > land_parcel_area; ')
+FROM
+    ( SELECT hapar_id,
+             YEAR,
+             sum,
+             land_parcel_area
+     FROM
+         (SELECT hapar_id,
+                 YEAR,
+                 sum(all_bps)
+          FROM
+              (SELECT hapar_id,
+                      YEAR,
+                      CASE
+                          WHEN owner_bps_claimed_area IS NULL THEN user_bps_claimed_area
+                          WHEN user_bps_claimed_area IS NULL THEN owner_bps_claimed_area
+                          ELSE owner_bps_claimed_area + user_bps_claimed_area 
+                      END AS all_bps
+               FROM FINAL) foo
+          GROUP BY hapar_id,
+                   YEAR) bar
+JOIN FINAL USING (hapar_id,
+                  year)) final
+WHERE f.hapar_id = final.hapar_id
+    AND f.year = final.year 
+    AND sum > final.land_parcel_area; -- 20,910 rows
+
+--*STEP 8: create final table 
+DROP TABLE IF EXISTS ladss.saf_iacs_2016_2017_2018; 
+CREATE TABLE ladss.saf_iacs_2016_2017_2018 AS 
 SELECT * 
-FROM FINAL 
-WHERE user_hahol_id <> owner_hahol_id
+FROM final;
+-- final count 1,983,571
+
+

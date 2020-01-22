@@ -28,6 +28,19 @@ Parcel < LU	5,085
 
 (5440/180233)*100 = 3.01% <-- seasonal
 
+--* finds and sums difference in SINGLE overclaims where bps_claimed_area > land_parcel_area for joined table
+SELECT hapar_id, YEAR, total_claimed_area - owner_land_parcel_area AS diff
+FROM
+    (SELECT hapar_id,
+            YEAR,
+            owner_land_parcel_area,
+            user_land_parcel_area,
+            owner_bps_claimed_area + user_bps_claimed_area AS total_claimed_area
+     FROM joined) foo
+WHERE total_claimed_area > owner_land_parcel_area
+    OR total_claimed_area > user_land_parcel_area
+    ORDER BY diff DESC;
+
 
  -- categorises llo flags based on matches or no matches
 SELECT CASE
