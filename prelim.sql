@@ -1147,7 +1147,9 @@ WHERE owner_land_use <> user_land_use
          FROM excl)
     AND user_land_use NOT IN
         (SELECT land_use
-         FROM excl); -- 8,385 rows
+         FROM excl) 
+    AND owner_land_use <> 'NON_SAF' 
+    AND user_land_use <> 'NON_SAF'; -- 8,385 rows
 
 --sum(land_use_area) > land_parcel_area
 UPDATE final AS f
@@ -1213,5 +1215,8 @@ CREATE TABLE ladss.saf_iacs_2016_2017_2018 AS
 SELECT * 
 FROM final;
 -- final count 1,983,571
+
+--Permissions
+GRANT SELECT ON ladss.saf_iacs_2016_2017_2018 TO dw40462;
 
 

@@ -217,3 +217,40 @@ WHERE hapar_id = 85859 -- so many claims? so many businesses? also these: 83863,
 
 
 --! should I match non_saf owners where other land_use exists for that year? 224600, 212811, 178656, 229246, 230767
+
+
+--* SPATIAL MATCHES 
+
+-- count of businesses per hapar_id (2016)
+SELECT hapar_id,
+       count(distinct businesses)
+FROM
+    (SELECT hapar_id,
+            owner_habus_id AS businesses
+     FROM ladss.saf_iacs_2016_2017_2018
+     WHERE owner_habus_id IS NOT NULL
+         AND year = 2016
+     UNION SELECT hapar_id,
+                  user_habus_id AS businesses
+     FROM ladss.saf_iacs_2016_2017_2018
+     WHERE user_habus_id IS NOT NULL
+         AND year = 2016) foo
+GROUP BY hapar_id
+
+-- count of landused per hapar_id (2016)
+SELECT hapar_id,
+       count(distinct lu) INTO TABLE lu_per_hapar_2016
+FROM
+    (SELECT hapar_id,
+            owner_land_use AS lu
+     FROM ladss.saf_iacs_2016_2017_2018
+     WHERE owner_land_use IS NOT NULL
+         AND year = 2016
+     UNION SELECT hapar_id,
+                  user_land_use AS lu
+     FROM ladss.saf_iacs_2016_2017_2018
+     WHERE user_land_use IS NOT NULL
+         AND year = 2016) foo
+GROUP BY hapar_id
+
+-- count of landuses per field 
