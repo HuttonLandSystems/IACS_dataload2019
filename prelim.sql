@@ -475,7 +475,6 @@ WHERE bps_claimed_area <> land_use_area
     AND bps_claimed_area <> 0
     AND bps_claimed_area <= land_parcel_area;; -- updates 21,385 rows
 
-
 --delete remaining NULL land_use_area
 DELETE FROM 
 temp_permanent 
@@ -1218,5 +1217,6 @@ FROM final;
 
 --Permissions
 GRANT SELECT ON ladss.saf_iacs_2016_2017_2018 TO dw40462;
+GRANT SELECT ON ladss.saf_iacs_2016_2017_2018 TO dm40247;
 
 

@@ -254,3 +254,55 @@ FROM
 GROUP BY hapar_id
 
 -- count of landuses per field 
+
+
+
+--TODO      COMMONS --------------------------------------------------------
+--TODO          hapar_id = 96993 has cg_hahol_id <> hahol_id (2016)
+-- finds difference between bps_eligible_area and total payment_regions
+SELECT cg_hahol_id,
+       hapar_id,
+       YEAR,
+       digitised_area,
+       excluded_land_area,
+       bps_eligible_area,
+       region_total,
+       bps_eligible_area - region_total AS diff
+FROM
+    (SELECT cg_hahol_id,
+            hapar_id,
+            YEAR,
+            digitised_area,
+            bps_eligible_area,
+            excluded_land_area,
+            payment_region_1 + payment_region_2 + payment_region_3 AS region_total
+     FROM rpid.common_grazing_lpid_detail_deliv20190911) foo
+WHERE bps_eligible_area <> region_total
+
+-- Groups parcels by cg_hahol_id
+--CREATE TABLE ladss.snapshot_2017_by_cg_holding AS
+SELECT hahol_id,
+       geom,
+       ST_AREA(geom)
+FROM
+    (SELECT hahol_id,
+            ST_Collect(geom) AS geom
+     FROM ladss.snapshot_2017
+     GROUP BY hahol_id) bar
+
+
+-- finds differences between areas
+SELECT hapar_id,
+       cg_hahol_id,
+       hahol_id,
+       start_date,
+       ROUND(CAST(ST_Area(geom) * 0.0001 AS NUMERIC), 2) AS calced_has,
+       digitised_area,
+       ABS(ROUND(CAST(ST_Area(geom) * 0.0001 AS NUMERIC), 2) - digitised_area) AS digi_diff,
+       payment_region_1 + payment_region_2 + payment_region_3 AS sum_pay_regs,
+       bps_eligible_area,
+       excluded_land_area
+FROM rpid.snapshot_2017_0417_peudonymised
+JOIN rpid.common_grazing_lpid_detail_deliv20190911 USING (hapar_id)
+WHERE year = 2016
+    AND ABS(ROUND(CAST(ST_Area(geom) * 0.0001 AS NUMERIC), 2) - digitised_area) <> 0
