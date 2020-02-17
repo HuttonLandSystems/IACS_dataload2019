@@ -12,13 +12,13 @@ UPDATE share
 SET id = CONCAT('S', id);
 --- 43,566 rows
 
-        -- group by cg_hahol_id, year and sum everything else from lpid detail table
+-- group by cg_hahol_id, year and sum everything else from lpid detail table
 DROP TABLE IF EXISTS lpid; 
 SELECT cg_hahol_id,
        YEAR,
        sum(digitised_area) AS lpid_area,
        sum(bps_eligible_area) AS lpid_bps_eligible_area,
-       sum(excluded_land_area) AS lpid_excluded_land_area INTO lpid
+       sum(excluded_land_area) AS lpid_excluded_land_area INTO TEMP TABLE lpid
 FROM rpid.common_grazing_lpid_detail_deliv20190911
 GROUP BY cg_hahol_id,
          year;
@@ -32,7 +32,7 @@ UPDATE lpid
 SET id = CONCAT('L', id);
 --- 3,675 rows
 
-        -- group by hahol_id and sum geom from snapshot // gets digi_area from grouped 
+-- group by hahol_id and sum geom from snapshot // gets digi_area from grouped 
 DROP TABLE IF EXISTS snapshot17;
 SELECT hahol_id,
        ST_Area(ST_COLLECT(geom)) * 0.0001 AS digi_area INTO TEMP TABLE snapshot17
@@ -72,7 +72,7 @@ ALTER TABLE commons ADD COLUMN error_log VARCHAR;
 -- find mistakes and fix errors
 UPDATE commons c
 SET commons_area = c.digi_area,
-    change_note = CONCAT('changed commons_area by ', CAST(abs(c.digi_area - c.lpid_area) AS VARCHAR), ' ha based on digi_area; ')
+    change_note = CONCAT('changed commons_area by ', CAST(abs(c.digi_area - c.lpid_area) AS VARCHAR), 'ha based on digi_area; ')
 FROM
     (SELECT cg_hahol_id,
             digi_area,
@@ -95,9 +95,14 @@ SET land_use = 'RGR',
     change_note = CONCAT(change_note, 'changed blank land_use to RGR; ')
 WHERE land_use = ''; -- 120 rows
 
+-- make lpid_bps_eligible_area match parcel area where eligible area is larger 
+UPDATE commons c 
+SET lpid_bps_eligible_area = commons_area, 
+    change_note = CONCAT(change_note, 'changed lpid_bps_eligible_area to match commons where eligible area larger by ', CAST(ABS(commons_area - lpid_bps_eligible_area) AS VARCHAR), 'ha ; ')
+WHERE commons_area < lpid_bps_eligible_area; -- 62 rows
 
---TODO how to fix difference between eligible_areas?
--- finds diff between eligible_areas from both tables
+
+--TODO how to fix difference between eligible_area and claimed_area?
 SELECT cg_hahol_id,
        lpid_bps_eligible_area,
        sum,
@@ -105,20 +110,26 @@ SELECT cg_hahol_id,
 FROM
     (SELECT cg_hahol_id,
             lpid_bps_eligible_area,
-            sum(share_bps_eligible_area)
+            sum(bps_claimed_area)
      FROM commons
      GROUP BY cg_hahol_id,
               lpid_bps_eligible_area) foo
-WHERE sum <> lpid_bps_eligible_area
-ORDER BY abs(lpid_bps_eligible_area - sum) DESC
+WHERE sum > lpid_bps_eligible_area
+ORDER BY abs(lpid_bps_eligible_area - sum)
 
 
-
+--TODO double share_hahol_id per cg_hahol_id?
 
 
 --TODO  convert deleted landuse to excl (or rather just include it in the excl table)
 
 
 -- TODO   why is share_area = 0? 248 rows
---TODO    why does share_bps_claimed_area = lfass_claimed_area?  9819/10293 = 95%!!!
+--TODO    why does bps_claimed_area = lfass_claimed_area?  9819/10293 = 95%!!!
+
+--TODO    finds when bps_claimed_area <> lfass_claimed_area and neither of them = 0
+--TODO is this a problem?
+SELECT * 
+FROM commons 
+WHERE bps_claimed_area <> lfass_claimed_area AND (bps_claimed_area <> 0 AND lfass_claimed_area <> 0)
 
