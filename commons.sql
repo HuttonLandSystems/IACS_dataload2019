@@ -233,54 +233,6 @@ SET lpid_bps_eligible_area = commons_area,
     change_note = CONCAT(change_note, 'changed lpid_bps_eligible_area to match commons where eligible area larger by ', CAST(ABS(commons_area - lpid_bps_eligible_area) AS VARCHAR), 'ha ; ')
 WHERE commons_area < lpid_bps_eligible_area; -- 364 rows
 
---TODO how to fix difference between eligible_area and claimed_area?
-SELECT cg_hahol_id,
-       lpid_bps_eligible_area,
-       share_claimed_area,
-       year,
-       abs(lpid_bps_eligible_area - share_claimed_area) AS diff
-FROM
-    (SELECT cg_hahol_id,
-            lpid_bps_eligible_area,
-            year,
-            sum(bps_claimed_area) AS share_claimed_area
-     FROM commons
-     GROUP BY cg_hahol_id,
-              lpid_bps_eligible_area, 
-              year) foo
-WHERE share_claimed_area > lpid_bps_eligible_area
-ORDER BY abs(lpid_bps_eligible_area - share_claimed_area);
-
---TODO double share_hahol_id per cg_hahol_id?
-SELECT *
-FROM
-    (SELECT cg_hahol_id,
-            share_hahol_id,
-            year,
-            COUNT(DISTINCT land_use) AS no_lUs
-     FROM
-         (SELECT cg_hahol_id,
-                 share_hahol_id,
-                 year,
-                 count(*)
-          FROM commons
-          GROUP BY cg_hahol_id,
-                   share_hahol_id,
-                   year) foo
-     JOIN commons c USING (cg_hahol_id,
-                           share_hahol_id,
-                           year)
-     WHERE count > 1
-     GROUP BY cg_hahol_id,
-              share_hahol_id,
-              year) bar
-JOIN commons c USING (cg_hahol_id,
-                      share_hahol_id,
-                      year)
-WHERE no_lUs = 1
-ORDER BY cg_hahol_id,
-         share_hahol_id
-
 --TODO combine claims with same cg_hahol_id, mlc_hahol_id, share_hahol_id, habus_id, share_bps_eligible_area, land_use
 -- sum(share_area) and sum(bps_claimed_area) and sum(lfass_claimed_area) in the update
 WITH mult_claims AS
@@ -338,6 +290,53 @@ GROUP BY cg_hahol_id,
          error_log
 
 
+--TODO how to fix difference between eligible_area and claimed_area?
+SELECT cg_hahol_id,
+       lpid_bps_eligible_area,
+       share_claimed_area,
+       year,
+       abs(lpid_bps_eligible_area - share_claimed_area) AS diff
+FROM
+    (SELECT cg_hahol_id,
+            lpid_bps_eligible_area,
+            year,
+            sum(bps_claimed_area) AS share_claimed_area
+     FROM commons
+     GROUP BY cg_hahol_id,
+              lpid_bps_eligible_area, 
+              year) foo
+WHERE share_claimed_area > lpid_bps_eligible_area
+ORDER BY abs(lpid_bps_eligible_area - share_claimed_area);
+
+--TODO double share_hahol_id per cg_hahol_id?
+SELECT *
+FROM
+    (SELECT cg_hahol_id,
+            share_hahol_id,
+            year,
+            COUNT(DISTINCT land_use) AS no_lUs
+     FROM
+         (SELECT cg_hahol_id,
+                 share_hahol_id,
+                 year,
+                 count(*)
+          FROM commons
+          GROUP BY cg_hahol_id,
+                   share_hahol_id,
+                   year) foo
+     JOIN commons c USING (cg_hahol_id,
+                           share_hahol_id,
+                           year)
+     WHERE count > 1
+     GROUP BY cg_hahol_id,
+              share_hahol_id,
+              year) bar
+JOIN commons c USING (cg_hahol_id,
+                      share_hahol_id,
+                      year)
+WHERE no_lUs = 1
+ORDER BY cg_hahol_id,
+         share_hahol_id;
 
 --TODO  convert deleted landuse to excl (or rather just include it in the excl table)
 
@@ -346,7 +345,7 @@ GROUP BY cg_hahol_id,
 --TODO    why does bps_claimed_area = lfass_claimed_area?  9819/10293 = 95%!!!
 
 --TODO    finds when bps_claimed_area <> lfass_claimed_area and neither of them = 0
---TODO is this a problem?
+-- is this a problem?
 SELECT * 
 FROM commons 
 WHERE bps_claimed_area <> lfass_claimed_area AND (bps_claimed_area <> 0 AND lfass_claimed_area <> 0)
