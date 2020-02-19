@@ -2930,4 +2930,9 @@ ORDER BY year,
          cg_hahol_id,
          share_hahol_id;
 
-         
+-- fix nulls
+UPDATE commons 
+SET mlc_hahol_id = share_hahol_id, 
+    change_note = CONCAT(change_note, 'set mlc_hahol_id = share_hahol_id where mlc is null; ')
+WHERE mlc_hahol_id IS NULL; -- 257 rows */         
+

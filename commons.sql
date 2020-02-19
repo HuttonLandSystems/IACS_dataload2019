@@ -227,6 +227,12 @@ FROM commons
 WHERE share_area = 0
     AND bps_claimed_area = 0; -- 658 rows all have 0 bps_claimed_area
 
+-- fix nulls
+/*UPDATE commons 
+SET share_hahol_id = mlc_hahol_id, 
+    change_note = CONCAT(change_note, 'set share_hahol_id = mlc_hahol_id where share is null; ')
+WHERE share_hahol_id IS NULL; -- 284 rows */
+
 -- make lpid_bps_eligible_area match parcel area where eligible area is larger 
 UPDATE commons c 
 SET lpid_bps_eligible_area = commons_area, 
@@ -355,6 +361,18 @@ JOIN commons c USING (cg_hahol_id,
 WHERE commons.cg_hahol_id = foo.cg_hahol_id
     AND commons.year = foo.year 
     AND foo.lpid_bps_eligible_area < sum_claim; -- 74 rows
+
+--TODO find more mistakes 
+SELECT *
+FROM commons
+ORDER BY YEAR,
+         cg_hahol_id,
+         mlc_hahol_id,
+         share_hahol_id,
+         habus_id
+
+
+
 
 
 
