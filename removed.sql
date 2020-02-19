@@ -2859,5 +2859,75 @@ SET land_use = 'RGR',
     change_note = CONCAT(change_note, 'changed blank land_use to RGR; ')
 WHERE land_use = ''; -- 120 rows
 
+--TODO    finds when bps_claimed_area <> lfass_claimed_area and neither of them = 0
+-- is this a problem?
+SELECT * 
+FROM commons 
+WHERE bps_claimed_area <> lfass_claimed_area AND (bps_claimed_area <> 0 AND lfass_claimed_area <> 0)
 
+--TODO this is done
+--TODO sum(bps_claim_area) > lpid_bps_eligible_area
+SELECT cg_hahol_id,
+       YEAR,
+       lpid_bps_eligible_area,
+       sum(bps_claimed_area) AS sum_claim,
+       sum(bps_claimed_area) - lpid_bps_eligible_area AS diff
+FROM commons
+GROUP BY cg_hahol_id,
+         year,
+         lpid_bps_eligible_area
+HAVING lpid_bps_eligible_area < sum(bps_claimed_area)
+ORDER BY sum(bps_claimed_area) - lpid_bps_eligible_area DESC
 
+--TODO how to fix difference between eligible_area and claimed_area?
+--put a note in the error_log without fixing it -- only 74 rows
+SELECT cg_hahol_id,
+       lpid_bps_eligible_area,
+       total_claim,
+       year,
+       abs(lpid_bps_eligible_area - total_claim) AS diff
+FROM
+    (SELECT cg_hahol_id,
+            lpid_bps_eligible_area,
+            year,
+            sum(bps_claimed_area) AS total_claim
+     FROM commons
+     GROUP BY cg_hahol_id,
+              lpid_bps_eligible_area, 
+              year) foo
+WHERE total_claim > lpid_bps_eligible_area
+ORDER BY abs(lpid_bps_eligible_area - total_claim);
+
+--TODO double share_hahol_id per cg_hahol_id?
+-- not necessarily a problem
+SELECT *
+FROM
+    (SELECT cg_hahol_id,
+            share_hahol_id,
+            year,
+            COUNT(DISTINCT land_use) AS no_lUs
+     FROM
+         (SELECT cg_hahol_id,
+                 share_hahol_id,
+                 year,
+                 count(*)
+          FROM commons
+          GROUP BY cg_hahol_id,
+                   share_hahol_id,
+                   year) foo
+     JOIN commons c USING (cg_hahol_id,
+                           share_hahol_id,
+                           year)
+     WHERE count > 1
+     GROUP BY cg_hahol_id,
+              share_hahol_id,
+              year) bar
+JOIN commons c USING (cg_hahol_id,
+                      share_hahol_id,
+                      year)
+WHERE no_lUs = 1
+ORDER BY year,
+         cg_hahol_id,
+         share_hahol_id;
+
+         

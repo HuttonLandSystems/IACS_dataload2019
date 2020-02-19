@@ -18,7 +18,7 @@ SELECT cg_hahol_id,
        YEAR,
        sum(digitised_area) AS lpid_area,
        sum(bps_eligible_area) AS lpid_bps_eligible_area,
-       sum(excluded_land_area) AS lpid_excluded_land_area INTO TEMP TABLE lpid
+       sum(excluded_land_area) AS lpid_excluded_area INTO TEMP TABLE lpid
 FROM rpid.common_grazing_lpid_detail_deliv20190911
 GROUP BY cg_hahol_id,
          year;
@@ -79,7 +79,7 @@ SELECT cg_hahol_id,
        share_bps_eligible_area AS share_bps_eligible_area,
        bps_claimed_area,
        lfass_claimed_area,
-       lpid_excluded_land_area,
+       lpid_excluded_area,
        activity_type_desc AS land_activity,
        name AS land_use,
        year,
@@ -107,7 +107,7 @@ SELECT cg_hahol_id,
        share_bps_eligible_area AS share_bps_eligible_area,
        bps_claimed_area,
        lfass_claimed_area,
-       lpid_excluded_land_area,
+       lpid_excluded_area,
        activity_type_desc AS land_activity,
        name AS land_use,
        year,
@@ -135,7 +135,7 @@ SELECT cg_hahol_id,
        share_bps_eligible_area AS share_bps_eligible_area,
        bps_claimed_area,
        lfass_claimed_area,
-       lpid_excluded_land_area,
+       lpid_excluded_area,
        activity_type_desc AS land_activity,
        name AS land_use,
        year,
@@ -233,8 +233,9 @@ SET lpid_bps_eligible_area = commons_area,
     change_note = CONCAT(change_note, 'changed lpid_bps_eligible_area to match commons where eligible area larger by ', CAST(ABS(commons_area - lpid_bps_eligible_area) AS VARCHAR), 'ha ; ')
 WHERE commons_area < lpid_bps_eligible_area; -- 364 rows
 
---TODO combine claims with same cg_hahol_id, mlc_hahol_id, share_hahol_id, habus_id, share_bps_eligible_area, land_use
+-- combine claims with same cg_hahol_id, mlc_hahol_id, share_hahol_id, habus_id, share_bps_eligible_area, land_use
 -- sum(share_area) and sum(bps_claimed_area) and sum(lfass_claimed_area) in the update
+INSERT INTO commons
 WITH mult_claims AS
     (SELECT *
      FROM
@@ -244,6 +245,7 @@ WITH mult_claims AS
                  habus_id,
                  share_bps_eligible_area,
                  land_use,
+                 year,
                  COUNT(*)
           FROM commons
           GROUP BY cg_hahol_id,
@@ -251,92 +253,111 @@ WITH mult_claims AS
                    share_hahol_id,
                    habus_id,
                    share_bps_eligible_area,
-                   land_use) foo
+                   land_use,
+                   year) foo
      JOIN commons c USING (cg_hahol_id,
                            mlc_hahol_id,
                            share_hahol_id,
-                           habus_id)
-     WHERE count > 1)
+                           habus_id,
+                           share_bps_eligible_area,
+                           land_use,
+                           year)
+     WHERE count > 1),
+     main_query AS
+    (SELECT cg_hahol_id,
+            mlc_hahol_id,
+            share_hahol_id,
+            habus_id,
+            commons_area,
+            sum(share_area) AS share_area,
+            lpid_bps_eligible_area,
+            share_bps_eligible_area,
+            sum(bps_claimed_area) AS bps_claimed_area,
+            sum(lfass_claimed_area) AS lfass_claimed_area,
+            lpid_excluded_area,
+            'Undertaking Production Activities' AS land_activity,
+            land_use,
+            year,
+            STRING_AGG(id, ', ') AS id,
+            change_note,
+            error_log
+     FROM mult_claims
+     GROUP BY cg_hahol_id,
+              mlc_hahol_id,
+              share_hahol_id,
+              habus_id,
+              commons_area,
+              lpid_bps_eligible_area,
+              share_bps_eligible_area,
+              lpid_excluded_area,
+              land_use,
+              year,
+              change_note,
+              error_log)
 SELECT cg_hahol_id,
        mlc_hahol_id,
        share_hahol_id,
        habus_id,
        commons_area,
-       sum(share_area) AS share_area,
+       share_area,
        lpid_bps_eligible_area,
        share_bps_eligible_area,
-       sum(bps_claimed_area) AS bps_claimed_area,
-       sum(lfass_claimed_area) AS lfass_claimed_area,
-       lpid_excluded_land_area,
-       'Undertaking Production Activities' AS land_activity,
+       bps_claimed_area,
+       lfass_claimed_area,
+       lpid_excluded_area,
+       land_activity,
        land_use,
        year,
-       STRING_AGG(id, ', '),
+       SPLIT_PART(id, ', ', 1) || ', ' || SPLIT_PART(id, ', ', 2) || ', ' || SPLIT_PART(id, ', ', 4) AS id,
        change_note,
        error_log
-FROM mult_claims
-GROUP BY cg_hahol_id,
-         mlc_hahol_id,
-         share_hahol_id,
-         habus_id,
-         commons_area,
-         lpid_bps_eligible_area,
-         share_bps_eligible_area,
-         lpid_excluded_land_area,
-         'Undertaking Production Activities' AS land_activity,
-         land_use,
-         year,
-         change_note,
-         error_log
+FROM main_query; -- combines 1,034 rows into 517 total
 
+DELETE FROM commons
+WHERE (SPLIT_PART(id, ', ', 2) IN
+           (SELECT SPLIT_PART(id, ', ', 2)
+            FROM commons
+            WHERE id LIKE '%,%,%')
+       OR SPLIT_PART(id, ', ', 2) IN
+           (SELECT SPLIT_PART(id, ', ', 3)
+            FROM commons
+            WHERE id LIKE '%,%,%'))
+    AND id NOT LIKE '%,%,%'; -- deletes duplicate 1,034 rows 
 
---TODO how to fix difference between eligible_area and claimed_area?
-SELECT cg_hahol_id,
-       lpid_bps_eligible_area,
-       share_claimed_area,
-       year,
-       abs(lpid_bps_eligible_area - share_claimed_area) AS diff
+UPDATE commons 
+SET change_note = CONCAT(change_note, 'combined share where all same holding ids/brn and summed share_area, bps_claimed_area, lfass_claimed_area; ')
+WHERE id LIKE '%,%,%'; -- 517 rows
+
+-- set lpid_bps_eligible_area = commons_area - lpid_excluded_area 
+UPDATE commons
+SET lpid_bps_eligible_area = commons_area - lpid_excluded_area,
+    change_note = CONCAT(change_note, 'set lpid_bps_eligible_area = commons_area - lpid_excluded_area, change of ', CAST(abs(lpid_bps_eligible_area - (commons_area - lpid_excluded_area)) AS VARCHAR), 'ha; ')
+WHERE commons_area - lpid_excluded_area <> lpid_bps_eligible_area; --14,353 rows
+
+-- log overclaiming cg_hahol_id where sum(bps_claimed_area) > lpid_bps_eligible_area
+UPDATE commons
+SET error_log = CONCAT('sum(bps_claimed_area) > lpid_bps_eligible_area by ', CAST(diff AS VARCHAR), 'ha; ')
 FROM
     (SELECT cg_hahol_id,
+            YEAR,
             lpid_bps_eligible_area,
-            year,
-            sum(bps_claimed_area) AS share_claimed_area
+            sum(bps_claimed_area) AS sum_claim,
+            sum(bps_claimed_area) - lpid_bps_eligible_area AS diff
      FROM commons
      GROUP BY cg_hahol_id,
-              lpid_bps_eligible_area, 
-              year) foo
-WHERE share_claimed_area > lpid_bps_eligible_area
-ORDER BY abs(lpid_bps_eligible_area - share_claimed_area);
-
---TODO double share_hahol_id per cg_hahol_id?
-SELECT *
-FROM
-    (SELECT cg_hahol_id,
-            share_hahol_id,
-            year,
-            COUNT(DISTINCT land_use) AS no_lUs
-     FROM
-         (SELECT cg_hahol_id,
-                 share_hahol_id,
-                 year,
-                 count(*)
-          FROM commons
-          GROUP BY cg_hahol_id,
-                   share_hahol_id,
-                   year) foo
-     JOIN commons c USING (cg_hahol_id,
-                           share_hahol_id,
-                           year)
-     WHERE count > 1
-     GROUP BY cg_hahol_id,
-              share_hahol_id,
-              year) bar
+              year,
+              lpid_bps_eligible_area
+     HAVING lpid_bps_eligible_area < sum(bps_claimed_area)
+     ORDER BY sum(bps_claimed_area) - lpid_bps_eligible_area DESC) foo
 JOIN commons c USING (cg_hahol_id,
-                      share_hahol_id,
-                      year)
-WHERE no_lUs = 1
-ORDER BY cg_hahol_id,
-         share_hahol_id;
+                      year,
+                      lpid_bps_eligible_area)
+WHERE commons.cg_hahol_id = foo.cg_hahol_id
+    AND commons.year = foo.year 
+    AND foo.lpid_bps_eligible_area < sum_claim; -- 74 rows
+
+
+
 
 --TODO  convert deleted landuse to excl (or rather just include it in the excl table)
 
@@ -344,9 +365,11 @@ ORDER BY cg_hahol_id,
 
 --TODO    why does bps_claimed_area = lfass_claimed_area?  9819/10293 = 95%!!!
 
---TODO    finds when bps_claimed_area <> lfass_claimed_area and neither of them = 0
--- is this a problem?
-SELECT * 
-FROM commons 
-WHERE bps_claimed_area <> lfass_claimed_area AND (bps_claimed_area <> 0 AND lfass_claimed_area <> 0)
+
+
+
+
+
+--! cg_hahol_id = 22786 is bad polygon
+
 
