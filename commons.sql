@@ -1,3 +1,29 @@
+-- create a table for excluded land use codes for use later
+DROP TABLE IF EXISTS excl;
+CREATE TEMP TABLE excl (land_use VARCHAR(30),
+                                 descript VARCHAR(30));
+
+INSERT INTO excl (land_use, descript)
+VALUES ('BLU-GLS', 'Blueberries - glasshouse'), 
+       ('BRA', 'Bracken'), 
+       ('BUI', 'Building'), 
+       ('DELETED_LANDUSE', 'Deleted Landuse'),
+       ('EXCL','Generic exclusion'),
+       ('FSE', 'Foreshore'), 
+       ('GOR', 'Gorse'), 
+       ('LLO', 'Land let out'), 
+       ('MAR', 'Marsh'), 
+       ('RASP-GLS', 'Raspberries - glasshouse'), 
+       ('ROAD', 'Road'), 
+       ('ROK', 'Rocks'), 
+       ('SCB', 'Scrub'), 
+       ('SCE', 'Scree'), 
+       ('STRB-GLS', 'Strawberries - glasshouse'), 
+       ('TOM-GLS', 'Tomatoes - glasshouse'), 
+       ('TREE', 'Trees'),
+       ('TREES', 'Trees'), 
+       ('WAT', 'Water');
+
 -- Create prelim temp tables with IDs
 DROP TABLE IF EXISTS share;
 SELECT * INTO TEMP TABLE share 
@@ -372,6 +398,23 @@ ORDER BY YEAR,
          habus_id
 
 
+
+--TODO underclaim differences is interesting
+--TODO 2643/2692 cg_hahol_id+year are underclaiming on eligible land = 98.2%
+SELECT cg_hahol_id,
+       YEAR,
+       lpid_bps_eligible_area,
+       sum(bps_claimed_area) AS sum_bps_claim,
+       lpid_bps_eligible_area - sum(bps_claimed_area) AS bps_underclaim_diff,
+       sum(lfass_claimed_area) AS sum_lfass_claim,
+       lpid_bps_eligible_area - sum(lfass_claimed_area) AS lfass_underclaim_diff
+FROM commons
+GROUP BY cg_hahol_id,
+         lpid_bps_eligible_area,
+         year
+HAVING sum(bps_claimed_area) < lpid_bps_eligible_area
+OR sum(lfass_claimed_area) < lpid_bps_eligible_area
+ORDER BY lpid_bps_eligible_area - sum(bps_claimed_area) DESC
 
 
 
