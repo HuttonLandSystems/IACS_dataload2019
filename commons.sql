@@ -414,10 +414,15 @@ GROUP BY cg_hahol_id,
          year
 HAVING sum(bps_claimed_area) < lpid_bps_eligible_area
 OR sum(lfass_claimed_area) < lpid_bps_eligible_area
-ORDER BY lpid_bps_eligible_area - sum(bps_claimed_area) DESC
+ORDER BY lpid_bps_eligible_area - sum(bps_claimed_area) DESC; -- 2,643 rows
 
 
-
+--TODO excluded areas 
+SELECT *
+FROM commons
+WHERE land_use IN
+        (SELECT land_use
+         FROM excl); -- 17 rows
 
 
 --TODO  convert deleted landuse to excl (or rather just include it in the excl table)
