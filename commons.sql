@@ -379,5 +379,95 @@ SET error_log = NULL
 WHERE cg_hahol_id = 19298; -- 3 rows
 
 -- save final table in ladss
+DROP TABLE IF EXISTS ladss.saf_commons_2016_2017_2018;
 SELECT * INTO ladss.saf_commons_2016_2017_2018
 FROM commons;
+
+-- update error_log for commons fields in iacs 
+UPDATE ladss.saf_iacs_2016_2017_2018 as iacs
+SET error_log = CONCAT(iacs.error_log, 'this is a commons field - record duplicated in commons table; ')
+FROM
+    (SELECT *
+     FROM
+         (SELECT cg_hahol_id,
+                 hapar_id,
+                 YEAR
+          FROM rpid.common_grazing_lpid_detail_deliv20190911
+          GROUP BY cg_hahol_id,
+                   hapar_id,
+                   YEAR) foo
+     JOIN ladss.saf_iacs_2016_2017_2018 USING (hapar_id,
+                                               year)) commons
+WHERE iacs.hapar_id = commons.hapar_id
+    AND iacs.year = commons.year
+    AND (iacs.owner_bps_claimed_area <> 0
+         OR iacs.user_bps_claimed_area <> 0); -- 27 rows   
+
+UPDATE ladss.saf_iacs_2016_2017_2018 as iacs
+SET error_log = CONCAT(iacs.error_log, 'this is a commons field; ')
+FROM
+    (SELECT *
+     FROM
+         (SELECT cg_hahol_id,
+                 hapar_id,
+                 YEAR
+          FROM rpid.common_grazing_lpid_detail_deliv20190911
+          GROUP BY cg_hahol_id,
+                   hapar_id,
+                   YEAR) foo
+     JOIN ladss.saf_iacs_2016_2017_2018 USING (hapar_id,
+                                               year)) commons
+WHERE iacs.hapar_id = commons.hapar_id
+    AND iacs.year = commons.year
+    AND (iacs.error_log NOT LIKE '%this is a commons field - record duplicated in commons table; %' OR iacs.error_log IS NULL); -- 5,110 rows
+
+-- copy claimed areas from iacs to commons 
+INSERT INTO ladss.saf_commons_2016_2017_2018
+SELECT cg_hahol_id,
+       CASE
+           WHEN owner_mlc_hahol_id IS NOT NULL THEN owner_mlc_hahol_id
+           ELSE user_mlc_hahol_id
+       END AS mlc_hahol_id,
+       CASE
+           WHEN owner_mlc_hahol_id IS NOT NULL then owner_hahol_id
+           ELSE user_mlc_hahol_id
+       END AS share_hahol_id,
+       CASE
+           WHEN owner_habus_id IS NOT NULL THEN owner_habus_id
+           ELSE user_habus_id
+       END AS habus_id,
+       commons_area,
+       land_parcel_area AS share_area,
+       lpid_bps_eligible_area,
+       iacs.bps_eligible_area AS share_bps_eligible_area,
+       CASE
+           WHEN owner_bps_claimed_area IS NOT NULL THEN owner_bps_claimed_area
+           ELSE user_bps_claimed_area
+       END AS bps_claimed_area,
+       NULL AS lfass_claimed_area,
+       verified_exclusion AS lpid_excluded_area,
+       land_activity,
+       CASE
+           WHEN user_land_use IS NULL THEN owner_land_use
+           ELSE user_land_use
+       END land_use,
+       year,
+       claim_id AS id,
+       change_note,
+       'record duplicated in IACS table; ' AS error_log
+FROM ladss.saf_iacs_2016_2017_2018 AS iacs
+JOIN rpid.common_grazing_lpid_detail_deliv20190911 AS lpid USING (hapar_id,
+                                                                  year)
+JOIN
+    (SELECT cg_hahol_id,
+            commons_area,
+            lpid_bps_eligible_area,
+            YEAR
+     FROM ladss.saf_commons_2016_2017_2018
+     GROUP BY cg_hahol_id,
+              commons_area,
+              lpid_bps_eligible_area,
+              YEAR) commons USING (cg_hahol_id,
+                                   year)
+WHERE iacs.error_log LIKE '%this is a commons field %'; -- 27 rows
+
