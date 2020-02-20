@@ -1,29 +1,3 @@
--- create a table for excluded land use codes for use later
-DROP TABLE IF EXISTS excl;
-CREATE TEMP TABLE excl (land_use VARCHAR(30),
-                                 descript VARCHAR(30));
-
-INSERT INTO excl (land_use, descript)
-VALUES ('BLU-GLS', 'Blueberries - glasshouse'), 
-       ('BRA', 'Bracken'), 
-       ('BUI', 'Building'), 
-       ('DELETED_LANDUSE', 'Deleted Landuse'),
-       ('EXCL','Generic exclusion'),
-       ('FSE', 'Foreshore'), 
-       ('GOR', 'Gorse'), 
-       ('LLO', 'Land let out'), 
-       ('MAR', 'Marsh'), 
-       ('RASP-GLS', 'Raspberries - glasshouse'), 
-       ('ROAD', 'Road'), 
-       ('ROK', 'Rocks'), 
-       ('SCB', 'Scrub'), 
-       ('SCE', 'Scree'), 
-       ('STRB-GLS', 'Strawberries - glasshouse'), 
-       ('TOM-GLS', 'Tomatoes - glasshouse'), 
-       ('TREE', 'Trees'),
-       ('TREES', 'Trees'), 
-       ('WAT', 'Water');
-
 -- Create prelim temp tables with IDs
 DROP TABLE IF EXISTS share;
 SELECT * INTO TEMP TABLE share 
@@ -253,12 +227,6 @@ FROM commons
 WHERE share_area = 0
     AND bps_claimed_area = 0; -- 658 rows all have 0 bps_claimed_area
 
--- fix nulls
-/*UPDATE commons 
-SET share_hahol_id = mlc_hahol_id, 
-    change_note = CONCAT(change_note, 'set share_hahol_id = mlc_hahol_id where share is null; ')
-WHERE share_hahol_id IS NULL; -- 284 rows */
-
 -- make lpid_bps_eligible_area match parcel area where eligible area is larger 
 UPDATE commons c 
 SET lpid_bps_eligible_area = commons_area, 
@@ -286,15 +254,15 @@ WITH mult_claims AS
                    habus_id,
                    share_bps_eligible_area,
                    land_use,
-                   year) foo
+                   year
+            HAVING COUNT(*) > 1) foo
      JOIN commons c USING (cg_hahol_id,
                            mlc_hahol_id,
                            share_hahol_id,
                            habus_id,
                            share_bps_eligible_area,
                            land_use,
-                           year)
-     WHERE count > 1),
+                           year)),
      main_query AS
     (SELECT cg_hahol_id,
             mlc_hahol_id,
@@ -368,7 +336,7 @@ WHERE commons_area - lpid_excluded_area <> lpid_bps_eligible_area; --14,353 rows
 
 -- log overclaiming cg_hahol_id where sum(bps_claimed_area) > lpid_bps_eligible_area
 UPDATE commons
-SET error_log = CONCAT('sum(bps_claimed_area) > lpid_bps_eligible_area by ', CAST(diff AS VARCHAR), 'ha; ')
+SET error_log = CONCAT('overclaim: sum(bps_claimed_area) > lpid_bps_eligible_area by ', CAST(diff AS VARCHAR), 'ha; ')
 FROM
     (SELECT cg_hahol_id,
             YEAR,
@@ -388,54 +356,28 @@ WHERE commons.cg_hahol_id = foo.cg_hahol_id
     AND commons.year = foo.year 
     AND foo.lpid_bps_eligible_area < sum_claim; -- 74 rows
 
---TODO find more mistakes 
-SELECT *
-FROM commons
-ORDER BY YEAR,
-         cg_hahol_id,
-         mlc_hahol_id,
-         share_hahol_id,
-         habus_id
+-- log massive discrepancies in digi_areas to claims
+UPDATE commons
+SET error_log = CONCAT(commons.error_log, 'errors larger than 10ha between digi_area and other recorded areas (see change_note); ')
+FROM
+    (SELECT *
+     FROM
+         (SELECT id,
+                 REGEXP_REPLACE(change_note, '\D', '', 'g') AS nums
+          FROM commons
+          WHERE change_note LIKE '%;%;%') foo
+     WHERE substring(nums
+                     FROM 1
+                     FOR 1) <> '0'
+         AND length(nums) > 7) aboveten
+JOIN commons c USING (id)
+WHERE commons.id = aboveten.id; --331 rows // should be 328 (see below)
 
+-- delete wrong error log for little idiosyncratic rows
+UPDATE commons 
+SET error_log = NULL 
+WHERE cg_hahol_id = 19298; -- 3 rows
 
-
---TODO underclaim differences is interesting
---TODO 2643/2692 cg_hahol_id+year are underclaiming on eligible land = 98.2%
-SELECT cg_hahol_id,
-       YEAR,
-       lpid_bps_eligible_area,
-       sum(bps_claimed_area) AS sum_bps_claim,
-       lpid_bps_eligible_area - sum(bps_claimed_area) AS bps_underclaim_diff,
-       sum(lfass_claimed_area) AS sum_lfass_claim,
-       lpid_bps_eligible_area - sum(lfass_claimed_area) AS lfass_underclaim_diff
-FROM commons
-GROUP BY cg_hahol_id,
-         lpid_bps_eligible_area,
-         year
-HAVING sum(bps_claimed_area) < lpid_bps_eligible_area
-OR sum(lfass_claimed_area) < lpid_bps_eligible_area
-ORDER BY lpid_bps_eligible_area - sum(bps_claimed_area) DESC; -- 2,643 rows
-
-
---TODO excluded areas 
-SELECT *
-FROM commons
-WHERE land_use IN
-        (SELECT land_use
-         FROM excl); -- 17 rows
-
-
---TODO  convert deleted landuse to excl (or rather just include it in the excl table)
-
-
-
---TODO    why does bps_claimed_area = lfass_claimed_area?  9819/10293 = 95%!!!
-
-
-
-
-
-
---! cg_hahol_id = 22786 is bad polygon
-
-
+-- save final table in ladss
+SELECT * INTO ladss.saf_commons_2016_2017_2018
+FROM commons;

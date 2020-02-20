@@ -2936,3 +2936,47 @@ SET mlc_hahol_id = share_hahol_id,
     change_note = CONCAT(change_note, 'set mlc_hahol_id = share_hahol_id where mlc is null; ')
 WHERE mlc_hahol_id IS NULL; -- 257 rows */         
 
+--TODO find more mistakes 
+SELECT *
+FROM commons
+ORDER BY YEAR,
+         cg_hahol_id,
+         mlc_hahol_id,
+         share_hahol_id,
+         habus_id
+
+--TODO underclaim differences is interesting
+--TODO 2643/2692 cg_hahol_id+year are underclaiming on eligible land = 98.2%
+SELECT cg_hahol_id,
+       YEAR,
+       lpid_bps_eligible_area,
+       sum(bps_claimed_area) AS sum_bps_claim,
+       lpid_bps_eligible_area - sum(bps_claimed_area) AS bps_underclaim_diff,
+       sum(lfass_claimed_area) AS sum_lfass_claim,
+       lpid_bps_eligible_area - sum(lfass_claimed_area) AS lfass_underclaim_diff
+FROM commons
+GROUP BY cg_hahol_id,
+         lpid_bps_eligible_area,
+         year
+HAVING sum(bps_claimed_area) < lpid_bps_eligible_area
+OR sum(lfass_claimed_area) < lpid_bps_eligible_area
+ORDER BY lpid_bps_eligible_area - sum(bps_claimed_area) DESC; -- 2,643 rows
+
+--TODO excluded areas 
+SELECT *
+FROM commons
+WHERE land_use IN
+        (SELECT land_use
+         FROM excl); -- 17 rows
+
+
+--TODO  convert deleted landuse to excl (or rather just include it in the excl table)
+
+--TODO    why does bps_claimed_area = lfass_claimed_area?  9819/10293 = 95%!!!
+
+
+-- fix nulls
+/*UPDATE commons 
+SET share_hahol_id = mlc_hahol_id, 
+    change_note = CONCAT(change_note, 'set share_hahol_id = mlc_hahol_id where share is null; ')
+WHERE share_hahol_id IS NULL; -- 284 rows */
