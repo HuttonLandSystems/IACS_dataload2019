@@ -57,7 +57,8 @@ GROUP BY farm_code_hahol_id; -- 919 rows / distinct cg_hahol_id -- ALL MATCH
 -- 2018 group by hahol_id and sum geom from snapshot // gets digi_area from grouped
 DROP TABLE IF EXISTS snapshot19;
 SELECT farm_code_hahol_id AS hahol_id,
-       ST_Area(ST_COLLECT(wkb_geometry)) * 0.0001 AS digi_area INTO TEMP TABLE snapshot19
+       ST_Area(ST_COLLECT(wkb_geometry)) * 0.0001 AS digi_area,
+       ST_COLLECT(wkb_geometry) INTO TEMP TABLE snapshot19
 FROM rpid.lpis_land_parcels_2019_jhi_deliv20190911
 WHERE farm_code_hahol_id IN
         (SELECT cg_hahol_id
