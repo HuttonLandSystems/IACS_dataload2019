@@ -284,6 +284,7 @@ VALUES ('BLU-GLS', 'Blueberries - glasshouse'),
        ('TOM-GLS', 'Tomatoes - glasshouse'), 
        ('TREE', 'Trees'),
        ('TREES', 'Trees'), 
+       ('TURF', 'Trees'),
        ('WAT', 'Water');
 
 --*Step 2. Fix land_parcel_area IS NULL or 0

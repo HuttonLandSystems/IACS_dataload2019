@@ -1,21 +1,34 @@
 DROP TABLE IF EXISTS LU_rank;
-CREATE TEMP TABLE LU_rank( land_use VARCHAR(7),
-                                    rank INTEGER);
-INSERT INTO LU_rank(land_use,rank) VALUES ('SB',1);
-INSERT INTO LU_rank(land_use,rank) VALUES ('SO',1);
-INSERT INTO LU_rank(land_use,rank) VALUES ('SPOT',1);
-INSERT INTO LU_rank(land_use,rank) VALUES ('WBS',1);
-INSERT INTO LU_rank(land_use,rank) VALUES ('WOSR',1);
-INSERT INTO LU_rank(land_use,rank) VALUES ('WW',1);
-INSERT INTO LU_rank(land_use,rank) VALUES ('FALW',2);
-INSERT INTO LU_rank(land_use,rank) VALUES ('NETR_NA',2);
-INSERT INTO LU_rank(land_use,rank) VALUES ('PC',2);
-INSERT INTO LU_rank(land_use,rank) VALUES ('SRC',2);
-INSERT INTO LU_rank(land_use,rank) VALUES ('UCAA',2);
-INSERT INTO LU_rank(land_use,rank) VALUES ('TGRS',3);
-INSERT INTO LU_rank(land_use,rank) VALUES ('PGRS',4);
-INSERT INTO LU_rank(land_use,rank) VALUES ('WDG',5);
-INSERT INTO LU_rank(land_use,rank) VALUES ('RGR',6);
+CREATE TEMP TABLE lu_rank
+(land_use VARCHAR(300), rank INTEGER);
+
+INSERT INTO lu_rank (land_use , rank)
+VALUES
+    ('ALF', 1),('AMCP', 1),('ARTC', 1),('ASPG', 1),('ASSF', 1),
+    ('BFLO', 1),('BFT', 1),('BKB', 1),('BLB', 1),('BLR-OPEN', 1),
+    ('BLR-POLY', 1),('BLU-OPEN', 1),('BPP', 1),('BRT', 1),('BSP', 1),
+    ('BW', 1),('CABB', 1),('CALA', 1),('CANS', 1),('CARR', 1),
+    ('CAUL', 1),('CEL', 1),('CHIC', 1),('CHP', 1),('CLO', 1),
+    ('CRB', 1),('ENG-B', 1),('GAR', 1),('GSB', 1),('HS', 1),
+    ('LEEK', 1),('LEN', 1),('LETT', 1),('LGB', 1),('LIN', 1),
+    ('MAIZ', 1),('MBSF', 1),('MSC', 1),('MU', 1),('NU-FS', 1),
+    ('NU-OT', 1),('NU-SH', 1),('OCS-B', 1),('OCS-K', 1),('ONI', 1),
+    ('ONU', 1),('OSFRT', 1),('OVEG', 1),('PAR', 1),('PUM', 1),
+    ('RASP-OPEN', 1),('RASP-POLY', 1),('RAST', 1),('RHB', 1),('RRC', 1),
+    ('SB', 1),('SBEAN', 1),('SFB', 1),('SL', 1),('SO', 1),('SOSR', 1),
+    ('SPEAS', 1),('SPOT', 1),('SPP', 1),('SRYE', 1),('SSF', 1),
+    ('STRB-OPEN', 1),('STRB-POLY', 1),('STRIT', 1),('STS', 1),('SUN', 1),
+    ('SW', 1),('SWS', 1),('TFRT', 1),('TSF', 1),('WB', 1),
+    ('WBEAN', 1),('WBS', 1),('WFB', 1),('WO', 1),('WOSR', 1),('WPEAS', 1),
+    ('WPOT', 1),('WPP', 1),('WRYE', 1),('WTRIT', 1),('WW', 1),('EX-SS', 2),
+    ('FALW', 2),('FALW-5', 2),('GCM', 2),('NETR-A', 2),('NETR-NA', 2),('PHA', 2),
+    ('SRC', 2),('UCAA', 2),('WDG', 2),('WFM', 2),('TGRS1', 3),('TGRS2', 3),
+    ('TGRS3', 3),('TGRS4', 3),('TGRS5', 3),('VET', 3),('PC', 4),('PGRS', 4),
+    ('RGR', 5),('BRA', 99),('BUI', 99),('EXCL', 99),('FSE', 99),('GOR', 99),
+    ('MAR', 99),('RASP-GLS', 99),('ROAD', 99),('ROK', 99),('SCB', 99),
+    ('SCE', 99),('STRB-GLS', 99),('TOM-GLS', 99),('TREES', 99),
+    ('TURF', 99),('WAT', 99);
+
 
 DROP TABLE IF EXISTS ladss.saf_iacs_2018_largest_claim_per_fid;
 WITH cte AS
@@ -142,6 +155,7 @@ FROM cte
 GROUP BY hapar_id,
          land_use) foobar 
          WHERE row_number = 1
+         
 
 -- COMMONS
 ----------------------------------------------------------------------------------
