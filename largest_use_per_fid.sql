@@ -1,3 +1,4 @@
+-- create table to rank land_uses based on intensity
 DROP TABLE IF EXISTS LU_rank;
 CREATE TEMP TABLE lu_rank
 (land_use VARCHAR(300), rank INTEGER);
@@ -22,14 +23,40 @@ VALUES
     ('WBEAN', 1),('WBS', 1),('WFB', 1),('WO', 1),('WOSR', 1),('WPEAS', 1),
     ('WPOT', 1),('WPP', 1),('WRYE', 1),('WTRIT', 1),('WW', 1),('EX-SS', 2),
     ('FALW', 2),('FALW-5', 2),('GCM', 2),('NETR-A', 2),('NETR-NA', 2),('PHA', 2),
-    ('SRC', 2),('UCAA', 2),('WDG', 2),('WFM', 2),('TGRS1', 3),('TGRS2', 3),
+    ('SRC', 2),('UCAA', 2),('WDG', 2),('WFM', 2),('TGRS', 3),('TGRS1', 3),('TGRS2', 3),
     ('TGRS3', 3),('TGRS4', 3),('TGRS5', 3),('VET', 3),('PC', 4),('PGRS', 4),
     ('RGR', 5),('BRA', 99),('BUI', 99),('EXCL', 99),('FSE', 99),('GOR', 99),
     ('MAR', 99),('RASP-GLS', 99),('ROAD', 99),('ROK', 99),('SCB', 99),
     ('SCE', 99),('STRB-GLS', 99),('TOM-GLS', 99),('TREES', 99),
     ('TURF', 99),('WAT', 99);
 
+-- create a table for excluded land use codes 
+DROP TABLE IF EXISTS excl;
+CREATE TEMP TABLE excl (land_use VARCHAR(30),
+                                 descript VARCHAR(30));
 
+INSERT INTO excl (land_use, descript)
+VALUES ('BLU-GLS', 'Blueberries - glasshouse'), 
+       ('BRA', 'Bracken'), 
+       ('BUI', 'Building'), 
+       ('EXCL','Generic exclusion'),
+       ('FSE', 'Foreshore'), 
+       ('GOR', 'Gorse'), 
+       ('LLO', 'Land let out'), 
+       ('MAR', 'Marsh'), 
+       ('RASP-GLS', 'Raspberries - glasshouse'), 
+       ('ROAD', 'Road'), 
+       ('ROK', 'Rocks'), 
+       ('SCB', 'Scrub'), 
+       ('SCE', 'Scree'), 
+       ('STRB-GLS', 'Strawberries - glasshouse'), 
+       ('TOM-GLS', 'Tomatoes - glasshouse'), 
+       ('TREE', 'Trees'),
+       ('TREES', 'Trees'), 
+       ('TURF', 'Trees'),
+       ('WAT', 'Water');
+
+-- find max claimed land_use 
 DROP TABLE IF EXISTS ladss.saf_iacs_2018_largest_claim_per_fid;
 WITH cte AS
     (SELECT hapar_id,
@@ -67,12 +94,12 @@ WITH cte AS
                GROUP BY hapar_id,
                         land_use
                HAVING sum(owner_bps_claimed_area) + sum(user_bps_claimed_area) <> 0
-               AND land_use <> 'EXCL') foorbar) foobar2
+               AND land_use NOT IN (SELECT land_use FROM excl)) foorbar) foobar2
      GROUP BY hapar_id,
               land_use)
 SELECT hapar_id,
        land_use,
-       max_claimed INTO ladss.saf_iacs_2018_largest_claim_per_fid
+       max_claimed --INTO ladss.saf_iacs_2018_largest_claim_per_fid
 FROM
     (SELECT cte.hapar_id,
             land_use,
@@ -91,6 +118,7 @@ FROM
      JOIN lu_rank USING (land_use)) foobar
 WHERE ROW_NUMBER = 1;
 
+-- find max land_use - not based on claims 
 WITH cte AS
     (SELECT hapar_id,
             land_use,
