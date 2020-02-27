@@ -30,32 +30,6 @@ VALUES
     ('SCE', 99),('STRB-GLS', 99),('TOM-GLS', 99),('TREES', 99),
     ('TURF', 99),('WAT', 99);
 
--- create a table for excluded land use codes 
-DROP TABLE IF EXISTS excl;
-CREATE TEMP TABLE excl (land_use VARCHAR(30),
-                                 descript VARCHAR(30));
-
-INSERT INTO excl (land_use, descript)
-VALUES ('BLU-GLS', 'Blueberries - glasshouse'), 
-       ('BRA', 'Bracken'), 
-       ('BUI', 'Building'), 
-       ('EXCL','Generic exclusion'),
-       ('FSE', 'Foreshore'), 
-       ('GOR', 'Gorse'), 
-       ('LLO', 'Land let out'), 
-       ('MAR', 'Marsh'), 
-       ('RASP-GLS', 'Raspberries - glasshouse'), 
-       ('ROAD', 'Road'), 
-       ('ROK', 'Rocks'), 
-       ('SCB', 'Scrub'), 
-       ('SCE', 'Scree'), 
-       ('STRB-GLS', 'Strawberries - glasshouse'), 
-       ('TOM-GLS', 'Tomatoes - glasshouse'), 
-       ('TREE', 'Trees'),
-       ('TREES', 'Trees'), 
-       ('TURF', 'Trees'),
-       ('WAT', 'Water');
-
 -- find max claimed land_use 
 DROP TABLE IF EXISTS ladss.saf_iacs_2018_largest_claim_per_fid;
 WITH cte AS
@@ -197,20 +171,21 @@ WITH cte AS
               land_use)
 SELECT cg_hahol_id,
        land_use,
-       max_bps_claimed INTO ladss.saf_commons_2018_largest_claim_per_fid
+       max_bps_claimed INTO ladss.saf_commons_2018_largest_use_per_fid
 FROM
     (SELECT foo.cg_hahol_id,
             land_use,
             max_bps_claimed,
             ROW_NUMBER() OVER (PARTITION BY foo.cg_hahol_id
-                               ORDER BY land_use) AS rn
+                               ORDER BY rank) AS rn
      FROM
          (SELECT cg_hahol_id,
                  MAX(sum_bps) AS max_bps_claimed
           FROM cte
           GROUP BY cg_hahol_id) foo
      JOIN cte AS self ON foo.cg_hahol_id = self.cg_hahol_id
-     AND sum_bps = max_bps_claimed) foobar
+     AND sum_bps = max_bps_claimed
+     JOIN lu_rank USING (land_use)) foobar
 WHERE rn = 1
 
 
