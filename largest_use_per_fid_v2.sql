@@ -28,7 +28,7 @@ VALUES
     ('RGR', 5),('BRA', 99),('BUI', 99),('EXCL', 99),('FSE', 99),('GOR', 99),
     ('MAR', 99),('RASP-GLS', 99),('ROAD', 99),('ROK', 99),('SCB', 99),
     ('SCE', 99),('STRB-GLS', 99),('TOM-GLS', 99),('TREES', 99),
-    ('TURF', 99),('WAT', 99);
+    ('TURF', 99),('WAT', 99),('NON_SAF', 99);
 
 WITH cte AS
     (SELECT hapar_id,
