@@ -59,7 +59,10 @@ FROM
                                 owner_land_leased_out AS owner_llo,
                                 user_land_leased_out AS user_llo
                          FROM ladss.saf_iacs_2018_processed
-                         WHERE error_log NOT LIKE '%commons%'
+                         WHERE hapar_id_v2 NOT IN
+                                 (SELECT hapar_id_v2
+                                  FROM ladss.saf_iacs_2018_processed
+                                  WHERE error_log LIKE '%commons%')
                          GROUP BY hapar_id_v2,
                                   owner_habus_id,
                                   user_habus_id,
@@ -132,24 +135,51 @@ FROM
                  geom AS iacs_geom
           FROM ladss.saf_iacs_landownership_2018) iacs ON ST_INTERSECTS(aw_geom, iacs_geom)) goo;
 
--- This is for the SAMPLE
-
-DROP TABLE IF EXISTS ladss.aw_and_iacs_landownership_2018_sample;
-
---INTO ladss.aw_and_iacs_landownership_2018_sample
-
-WHERE code = 'AB002'
-    OR code = 'AB170'
-    OR code = 'AR444'
-    OR code = 'CA073'
-    OR code = 'DM002'
-    OR code = 'EL027'
-    OR code = 'IN138'
-    OR code = 'IN337'
-    OR code = 'IN762'
-    OR code = 'PR076'
-    OR code = 'PR102'
-    OR code = 'RC213'
-    OR code = 'RC613'
-    OR code = 'RX001'
-    OR code = 'SU233' ) goo;
+-- aggregates on property // replicates Paola's table sent 10 April 2020 Friday
+SELECT property, 
+        aw_area_ha, 
+        sum_iacs_area, 
+        sum_intersection_area, 
+        percent_intersection, 
+        llo,
+        (llo_n/llo_length) * 100.0 AS percent_llo_n,
+        (llo_y/llo_length) * 100.0 AS percent_llo_yes,
+        distinct_owners, 
+        distinct_users
+FROM
+    (SELECT property, 
+            aw_area_ha, 
+            sum_iacs_area, 
+            sum_intersection_area, 
+            percent_intersection, 
+            llo, 
+            CAST(llo_y AS FLOAT) AS llo_y,
+            CAST(llo_n AS FLOAT) AS llo_n,
+            ARRAY_LENGTH(llo, 1) AS llo_length,
+            ARRAY_LENGTH(owner_habus_id, 1) AS distinct_owners,
+            ARRAY_LENGTH(user_habus_id, 1) AS distinct_users
+    FROM
+        (SELECT property,
+                aw_area_ha,
+                sum_iacs_area,
+                sum_intersection_area,
+                percent_intersection,
+                llo,
+                llo_y,
+                llo_n, 
+                ARRAY_LENGTH(llo, 1) AS llo_length,
+                ANYARRAY_UNIQ(owner_habus_id) AS owner_habus_id,
+                ANYARRAY_UNIQ(user_habus_id) AS user_habus_id 
+        FROM
+            (SELECT property, 
+                    aw_area_ha, 
+                    sum(iacs_area_ha) AS sum_iacs_area, 
+                    sum(area_of_intersection) AS sum_intersection_area, 
+                    (sum(area_of_intersection)/aw_area_ha) * 100 AS percent_intersection, 
+                    ARRAY_AGG(llo ORDER BY llo) AS llo, 
+                    sum(CASE WHEN llo='Y' then 1 END) AS llo_y,
+                    SUM(CASE WHEN llo='N' then 1 END) AS llo_n,
+                    ANYARRAY_AGG(owner_habus_id) AS owner_habus_id, 
+                    ANYARRAY_AGG(user_habus_id) AS user_habus_id
+            FROM ladss.aw_and_iacs_landownership_2018
+            GROUP BY property, aw_area_ha) goo) foo) foobar;
