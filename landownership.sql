@@ -104,7 +104,7 @@ SELECT property,
        owner_bps_claimed_area, 
        user_bps_claimed_area INTO ladss.aw_and_iacs_landownership_2018
 FROM cte
-JOIN ladss.saf_iacs_landownership_2018 USING (hapar_id); 
+JOIN ladss.saf_iacs_landownership_2018 USING (hapar_id);
 
 -- aggregates on property // replicates Paola's table sent 10 April 2020 Friday
 SELECT property,
