@@ -89,7 +89,7 @@ We know that RPID’s main concern is to verify claims made by farmers which aff
  
 However, for the Hutton to use this data for future analysis, it has to undergo a process of cleaning to correct errors and redundant data. The following sections enumerate the errors found and processes undertaken by which to fix them.
 
-The script in its entirety in included as an annex at the end of this document. A repository with associated files of the data load process exists at https://github.com/giannalogy/IACS_dataload2019.
+The scripts are included in a repository with associated files of the data load process at https://github.com/giannalogy/IACS_dataload2019.
 
 ### Preliminary Data Elimination
 From the very first steps, it was obvious there were some straightforward errors with the data which could be quickly eliminated. 
