@@ -273,12 +273,12 @@ Table 10: Number of spatial parcels which have at least one owner or user associ
 
 
 Table 11: Comparison of digi_area of spatial data to the declared land_parcel_area in the data
-| Year  | < 0\.01 difference | < 0\.1 difference | > 0\.1 difference |
-|-------|--------------------|-------------------|-------------------|
-| Count | %                  | Count             | %                 | Count | %      |
-| 2016  | 396,898            | 89\.2             | 18,565            | 4\.2  | 29,364 | 6\.6 |
-| 2017  | 399,330            | 89\.9             | 17,309            | 4\.9  | 27,474 | 6\.2 |
-| 2018  | 400,474            | 91\.1             | 13,665            | 3\.1  | 25,441 | 5\.8 |
+| Year | < 0.01 difference |      | < 0.1 difference |     | > 0.1 difference |     |
+|------|-------------------|------|------------------|-----|------------------|-----|
+|      | Count             | %    | Count            | %   | Count            | %   |
+| 2016 | 396,898           | 89.2 | 18,565           | 4.2 | 29,364           | 6.6 |
+| 2017 | 399,330           | 89.9 | 17,309           | 4.9 | 27,474           | 6.2 |
+| 2018 | 400,474           | 91.1 | 13,665           | 3.1 | 25,441           | 5.8 |
 
 
 ## Final Notes
