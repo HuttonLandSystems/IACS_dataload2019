@@ -24,11 +24,9 @@ Table 1: Tables received and integrated
 | Entitlement\_Year\_2017                                      |
 | Entitlement\_Year\_2018                                      |
 | Entitlement\_Year\_2019                                      | entitlement\_year\_deliv20190911                  |
- |
 | Scheme\_Payment\_2016                                        |
 | Scheme\_Payment\_2017                                        |
 | Scheme\_Payment\_2018                                        | scheme\_payment\_deliv20190911                    |
- |
 | LPID\_field\_LFA\_Classifications\_Payment\_Regions          |
 | LPID\_field\_LFA\_Classifications                            |
 | lpid\_payment\_region                                        | lpid\_field\_lfa\_classifications\_deliv20190911  |
@@ -48,7 +46,6 @@ Table 1: Tables received and integrated
 | SAF17\_Scheme\_Info                                          |
 | SAF18\_Scheme\_Info                                          |
 | SAF19\_Scheme\_Info                                          | saf\_scheme\_info\_deliv20190911                  |
- |
 | \[Spatial Data\]                                             |
 | LPIS\_LAND\_PARCELS\_2018\_JHI                               |
 | LPIS\_LAND\_PARCELS\_2019\_JHI                               |
