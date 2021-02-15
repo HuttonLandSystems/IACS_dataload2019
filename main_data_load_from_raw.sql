@@ -58,6 +58,9 @@
 -- error: sum(bps_claimed_area) > land_parcel_area
 
 --*STEP 8: create final table 
+
+
+-- EDIT on 15 February 2021 because DWJ found that user_bps_claimed_area and user_land_use_area were Integer type fields. The fix gained 33,495 rows. 
 --------------------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -723,7 +726,7 @@ WHERE change_note LIKE '%fourth join%'
                   FROM excl)
              AND user_land_use IN
                  (SELECT land_use
-                  FROM excl))); --2,152 rows //  total 3,516
+                  FROM excl))); --2,152 rows //  total 3,517
 
 --delete from original table where join above
 WITH joined_ids AS (
@@ -731,14 +734,14 @@ SELECT SPLIT_PART(claim_id, ', ', 1) AS claim_id_p
 FROM joined)
 DELETE 
 FROM temp_permanent AS t USING joined_ids AS a  
-WHERE t.claim_id_p = a.claim_id_p; -- 22,464 rows 
+WHERE t.claim_id_p = a.claim_id_p; -- 22,463 rows 
 
 WITH joined_ids AS (
 SELECT SPLIT_PART(claim_id, ', ', 2) AS claim_id_s
 FROM joined)
 DELETE 
 FROM temp_seasonal AS t USING joined_ids AS a  
-WHERE t.claim_id_s = a.claim_id_s; -- 23,492 rows 
+WHERE t.claim_id_s = a.claim_id_s; -- 23,493 rows 
 
 --*STEP 5. Clean up 
 --move leftover mutually exclusive ones to diff tables 
@@ -751,15 +754,15 @@ SELECT mlc_hahol_id AS owner_mlc_hahol_id,
        NULL :: BIGINT AS user_hahol_id,
        hapar_id,
        land_parcel_area AS owner_land_parcel_area,
-       NULL :: BIGINT AS user_land_parcel_area,
+       NULL :: NUMERIC AS user_land_parcel_area,
        bps_eligible_area AS owner_bps_eligible_area,
-       NULL :: BIGINT AS user_bps_eligible_area,
+       NULL :: NUMERIC AS user_bps_eligible_area,
        bps_claimed_area AS owner_bps_claimed_area,
-       NULL :: BIGINT AS user_bps_claimed_area,
+       NULL :: NUMERIC AS user_bps_claimed_area,
        verified_exclusion AS owner_verified_exclusion,
-       NULL :: BIGINT AS user_verified_exclusion,
+       NULL :: NUMERIC user_verified_exclusion,
        land_use_area AS owner_land_use_area,
-       NULL :: BIGINT AS user_land_use_area,
+       NULL :: NUMERIC AS user_land_use_area,
        land_use AS owner_land_use,
        NULL :: VARCHAR AS user_land_use,
        land_activity AS owner_land_activity,
@@ -773,7 +776,7 @@ SELECT mlc_hahol_id AS owner_mlc_hahol_id,
        claim_id_p AS claim_id,
        year,
        change_note INTO TEMP TABLE combine
-FROM temp_permanent;  --1,842,703 rows 
+FROM temp_permanent;  --1,842,704 rows 
 
 INSERT INTO combine 
 SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
@@ -783,15 +786,15 @@ SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
        NULL :: BIGINT AS owner_hahol_id,
        hahol_id AS user_hahol_id,
        hapar_id,
-       NULL :: BIGINT AS owner_land_parcel_area, 
+       NULL :: NUMERIC AS owner_land_parcel_area, 
        land_parcel_area AS user_land_parcel_area,
-       NULL :: BIGINT AS owner_bps_eligible_area,
+       NULL :: NUMERIC AS owner_bps_eligible_area,
        bps_eligible_area AS user_bps_eligible_area,
-       NULL :: BIGINT AS owner_bps_claimed_area,
+       NULL :: NUMERIC AS owner_bps_claimed_area,
        bps_claimed_area AS user_bps_claimed_area,
-       NULL :: BIGINT AS owner_verified_exclusion,
+       NULL :: NUMERIC AS owner_verified_exclusion,
        verified_exclusion AS user_verified_exclusion,
-       NULL :: BIGINT AS owner_land_use_area,
+       NULL :: NUMERIC AS owner_land_use_area,
        land_use_area AS user_land_use_area,
        NULL :: VARCHAR AS owner_land_use,
        land_use AS user_land_use,
@@ -806,7 +809,7 @@ SELECT NULL :: BIGINT AS owner_mlc_hahol_id,
        claim_id_s AS claim_id,
        year,
        change_note
-FROM temp_seasonal; --last 115,110 rows
+FROM temp_seasonal; --last 115,109 rows
 
 DROP TABLE temp_permanent; 
 DROP TABLE temp_seasonal;
@@ -877,11 +880,11 @@ WHERE owner_bps_eligible_area < user_bps_eligible_area; -- updates 241 rows
 --mark rows in joined where owner_verified_exclusion <> user_verified_exclusion
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume verified_exclusion = owner_verified_exclusion when owner > user; ')
-WHERE owner_verified_exclusion > user_verified_exclusion; -- updates 2,210 rows
+WHERE owner_verified_exclusion > user_verified_exclusion; -- updates 2,208 rows
 
 UPDATE joined 
 SET change_note = CONCAT(change_note, 'assume verified_exclusion = user_verified_exclusion WHEN user > owner; ')
-WHERE owner_verified_exclusion < user_verified_exclusion; -- updates 2,460 rows
+WHERE owner_verified_exclusion < user_verified_exclusion; -- updates 2,461 rows
 
 --mark rows in joined where owner_land_activity <> user_land_activity 
 UPDATE joined 
@@ -947,7 +950,7 @@ SELECT owner_mlc_hahol_id,
        claim_id,
        year,
        change_note
-FROM joined; -- moves 59,558 rows 
+FROM joined; -- moves 59,557 rows 
 
 -- infer NON-SAF renter where LLO yes 
 UPDATE final
@@ -957,7 +960,7 @@ WHERE user_habus_id IS NULL
     AND owner_land_leased_out = 'Y'
     and owner_land_use NOT IN
         (SELECT land_use
-         FROM excl); --updates 6,698 rows
+         FROM excl); --updates 6,683 rows
 
 -- infer NON-SAF owner for mutually exclusive users
 UPDATE final
@@ -966,7 +969,7 @@ SET owner_land_use = 'NON_SAF',
 WHERE owner_habus_id IS NULL
     AND user_land_use NOT IN
         (SELECT land_use
-         FROM excl); --updates 86,680 rows
+         FROM excl); --updates 86,648 rows
 
 -- delete zero excluded land use
 DELETE
@@ -974,7 +977,7 @@ FROM FINAL
 WHERE user_land_use_area = 0
     AND user_land_use IN
         (SELECT land_use
-         FROM excl); -- 33,538 rows
+         FROM excl); -- 42 rows
 
 DELETE
 FROM final
@@ -1000,7 +1003,7 @@ JOIN FINAL USING (hapar_id,
 WHERE f.hapar_id = final.hapar_id
     AND f.year = final.year
     AND max_parcel <> min_parcel
-    AND final.land_parcel_area <> max_parcel; -- updates 889 rows
+    AND final.land_parcel_area <> max_parcel; -- updates 163 rows
 
 --*STEP 7: Mark remaining errors // in order of frequency ASC
 -- alter table: add error_log to count things that are wrong 
@@ -1048,7 +1051,7 @@ JOIN final USING (hapar_id,
                   year)
 WHERE f.hapar_id = final.hapar_id
     AND f.year = final.year
-    AND sum_owner <> sum_user;-- 342 rows
+    AND sum_owner <> sum_user;-- 398 rows
 
 -- sum(owner_bps_eligible_area) <> sum(user_bps_eligible_area)
 UPDATE final AS f
@@ -1071,7 +1074,7 @@ JOIN final USING (hapar_id,
                   year)
 WHERE f.hapar_id = final.hapar_id
     AND f.year = final.year
-    AND sum_owner <> sum_user;-- 409 rows    
+    AND sum_owner <> sum_user;-- 485 rows    
 
 -- doubled user claims in join (one to many)
 UPDATE final AS f 
@@ -1093,12 +1096,12 @@ FROM
               YEAR,
               claim_id_s) bar
 WHERE count > 2) foobar 
-WHERE SPLIT_PART(f.claim_id, ', ', 2) = claim_id_s; -- 1,181 rows       
+WHERE SPLIT_PART(f.claim_id, ', ', 2) = claim_id_s; -- 1,185 rows       
 
 --seasonal renter with LLO yes
 UPDATE final AS f
 SET error_log = CONCAT(error_log, 'seasonal renter with LLO yes; ')
-WHERE user_land_leased_out = 'Y';-- 1,866 rows
+WHERE user_land_leased_out = 'Y';-- 1,865 rows
 
 -- doubled owner claims in join (many to one)
 UPDATE final AS f 
@@ -1120,7 +1123,7 @@ FROM
               YEAR,
               claim_id_p) bar
 WHERE count > 1) foobar 
-WHERE SPLIT_PART(f.claim_id, ', ', 1) = claim_id_p; -- 6,677 rows
+WHERE SPLIT_PART(f.claim_id, ', ', 1) = claim_id_p; -- 7,410 rows
 
 --multiple seasonal businesses declaring on same hapar_id
 UPDATE final AS f
@@ -1136,7 +1139,7 @@ FROM
      ORDER BY count DESC) AS mult_seas
 WHERE f.hapar_id = mult_seas.hapar_id
     AND f.year = mult_seas.year
-    AND count > 1; -- 6,018 rows
+    AND count > 1; -- 6,016 rows
 
 --owner_land_use <> user_land_use
 UPDATE final AS f
@@ -1149,7 +1152,7 @@ WHERE owner_land_use <> user_land_use
         (SELECT land_use
          FROM excl) 
     AND owner_land_use <> 'NON_SAF' 
-    AND user_land_use <> 'NON_SAF'; -- 8,385 rows
+    AND user_land_use <> 'NON_SAF'; -- 8,376 rows
 
 --sum(land_use_area) > land_parcel_area
 UPDATE final AS f
@@ -1178,7 +1181,7 @@ JOIN FINAL USING (hapar_id,
                   year)) final
 WHERE f.hapar_id = final.hapar_id
     AND f.year = final.year 
-    AND sum > final.land_parcel_area; -- 17,363 rows         
+    AND sum > final.land_parcel_area; -- 19,745 rows         
 
 --sum(bps_claimed_area) > land_parcel_area
 UPDATE final AS f
@@ -1207,17 +1210,19 @@ JOIN FINAL USING (hapar_id,
                   year)) final
 WHERE f.hapar_id = final.hapar_id
     AND f.year = final.year 
-    AND sum > final.land_parcel_area; -- 20,910 rows
+    AND sum > final.land_parcel_area; -- 4,330 rows
 
 --*STEP 8: create final table 
 DROP TABLE IF EXISTS ladss.saf_iacs_2016_2017_2018; 
 CREATE TABLE ladss.saf_iacs_2016_2017_2018 AS 
 SELECT * 
 FROM final;
--- final count 1,983,571
+-- final count 2,017,066
 
 --Permissions
-GRANT SELECT ON ladss.saf_iacs_2016_2017_2018 TO dw40462;
-GRANT SELECT ON ladss.saf_iacs_2016_2017_2018 TO dm40247;
+GRANT ALL ON ladss.saf_iacs_2016_2017_2018 TO dw40462;
+GRANT ALL ON ladss.saf_iacs_2016_2017_2018 TO dm40247;
+
+
 
 
