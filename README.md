@@ -1,6 +1,8 @@
 # 2019 IACS Data Load
 Gianna Gandossi | The James Hutton Institute | 12/09/2019 to 23/01/2020
 
+*   Edited 15/02/2021 to fix integer values in user_bps_claimed_area and user_land_use_area. Updated counts of affected rows are in the script at https://github.com/HuttonLandSystems/IACS_dataload2019/blob/master/main_data_load_from_raw.sql.
+
 ## Introduction
 This document focuses on the Permanent and Seasonal Land Parcels tables representing SAF claims and declarations on land parcels in Scotland. The Permanent table is for those businesses who own and sometimes lease the land out to users, or renters, which are represented in the Seasonal table. 
 
@@ -89,7 +91,7 @@ We know that RPID’s main concern is to verify claims made by farmers which aff
  
 However, for the Hutton to use this data for future analysis, it has to undergo a process of cleaning to correct errors and redundant data. The following sections enumerate the errors found and processes undertaken by which to fix them.
 
-The scripts are included in a repository with associated files of the data load process at https://github.com/giannalogy/IACS_dataload2019.
+The scripts are included in a repository with associated files of the data load process at https://github.com/HuttonLandSystems/IACS_dataload2019/blob/master/main_data_load_from_raw.sql.
 
 ### Preliminary Data Elimination
 From the very first steps, it was obvious there were some straightforward errors with the data which could be quickly eliminated. 
@@ -151,7 +153,7 @@ Solutions:
 2.	Copy land_use_area values from same land_use claims in different years (186 total)
 3.	Adjust bps_claimed_area to match land_parcel_area where bps_claimed_area > land_parcel_area (709 total)
 4.	Adjust land_use_area to match bps_claimed_area (207,568 total)
-•	This is the most radical change in the code. As land_use_area is (probably) not verified or validated in the data collection process, there is nothing that ties this value down to anything. Hence the use of bps_claimed_area as the real value of used area in a parcel.
+    *   This is the most radical change in the code. As land_use_area is (probably) not verified or validated in the data collection process, there is nothing that ties this value down to anything. Hence the use of bps_claimed_area as the real value of used area in a parcel.
 5.	Delete remaining NULL land_use_area (1,517 total)
 
 ### Joins
@@ -181,16 +183,16 @@ A note is added to the record if this is the case and the NULL land_use, either 
 ## Final Clean up 
 The last steps of the process aim to combine all the remaining rows while minimising data loss or alteration. Within the ‘joined’ temporary table, several records required certain assumptions: 
 
-•	Where owner_land_parcel_area <> user_land_parcel_area, I assume the larger area
-o	Changes 346 rows with largest change = 5.77 ha and total change = 79.63 ha
-•	Where owner_bps_eligible_area <> user_bps_eligible_area, I assume the larger area 
-o	Changes 414 rows with largest change = 273.3 ha and total change = 797.27 ha
-•	Where owner_verified_exclusion <> user_verified_exclusion, I assume the larger area
-o	Changes 4,670 rows with largest change = 4,208.76 ha and total change = 50,680.66 ha
-•	Where owner_land_activity <> user_land_activity, I assume user knows best
-o	Changes 40,793 rows
-•	Where owner_application_status <> user_application_status, I assume that the status is ‘Under Action/Assessment’ takes priority over any other status
-o	Changes 1,789 rows
+*   Where owner_land_parcel_area <> user_land_parcel_area, I assume the larger area
+    *   Changes 346 rows with largest change = 5.77 ha and total change = 79.63 ha
+*   Where owner_bps_eligible_area <> user_bps_eligible_area, I assume the larger area 
+    *   Changes 414 rows with largest change = 273.3 ha and total change = 797.27 ha
+*   Where owner_verified_exclusion <> user_verified_exclusion, I assume the larger area
+    *   Changes 4,670 rows with largest change = 4,208.76 ha and total change = 50,680.66 ha
+*   Where owner_land_activity <> user_land_activity, I assume user knows best
+    *   Changes 40,793 rows
+*   Where owner_application_status <> user_application_status, I assume that the status is ‘Under Action/Assessment’ takes priority over any other status
+    *   Changes 1,789 rows
 
 Several excluded land use declarations seemed to be automatically generated, and these were deleted. Specifically, those with zero land_use_area and an excluded land_use: 33,800 rows.
 
