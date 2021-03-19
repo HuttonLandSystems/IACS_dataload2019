@@ -12,7 +12,7 @@ In September 2019, LADSS received a DVD of the new IACS data. The following tabl
 Table 1: Tables received and integrated
 | Tables Received                                              | Tables integrated and pseudonymised at Hutton     |
 |--------------------------------------------------------------|---------------------------------------------------|
-| Common Grazing 2016 to 2019                                  |
+| [Common Grazing 2016 to 2019]                                |
 | common\_grazing\_lpid\_detail\_effective\_date\_15\_05\_2016 |
 | common\_grazing\_lpid\_detail\_effective\_date\_15\_05\_2017 |
 | common\_grazing\_lpid\_detail\_effective\_date\_15\_05\_2018 |
@@ -21,7 +21,7 @@ Table 1: Tables received and integrated
 | SAF17\_Common\_Grazing\_Share\_Usage                         |
 | SAF18\_Common\_Grazing\_Share\_Usage                         |
 | SAF19\_Common\_Grazing\_Share\_Usage                         | saf\_common\_grazing\_share\_usage\_deliv20190911 |
-| JHI Attribute Data                                           |
+| [JHI Attribute Data]                                         |
 | Entitlement\_Year\_2016                                      |
 | Entitlement\_Year\_2017                                      |
 | Entitlement\_Year\_2018                                      |
@@ -31,29 +31,26 @@ Table 1: Tables received and integrated
 | Scheme\_Payment\_2018                                        | scheme\_payment\_deliv20190911                    |
 | LPID\_field\_LFA\_Classifications\_Payment\_Regions          |
 | LPID\_field\_LFA\_Classifications                            | lpid\_field\_lfa\_classifications\_deliv20190911  |
-| lpid\_payment\_region                                        | 
-| lpid\_payment\_region\_deliv20190911                         |
-| SAF\_Land\_Parcels\_Usage                                    |
+| lpid\_payment\_region                                        | lpid\_payment\_region\_deliv20190911              |
+| [SAF Land Parcels Usage]                                     |
 | SAF16\_Permanent\_Land\_Parcels                              |
 | SAF16\_Seasonal\_Land\_Parcels                               |
 | SAF17\_Permanent\_Land\_Parcels                              |
 | SAF17\_Seasonal\_Land\_Parcels                               |
 | SAF18\_Permanent\_Land\_Parcels                              |
 | SAF18\_Seasonal\_Land\_Parcels                               |
-| SAF19\_Permanent\_Land\_Parcels                              |
-| SAF19\_Seasonal\_Land\_Parcels                               | saf\_permanent\_land\_parcels\_deliv20190911      |
-| saf\_seasonal\_land\_parcels\_deliv20190911                  |
-| SAF\_Scheme\_Info                                            |
+| SAF19\_Permanent\_Land\_Parcels                              | saf\_permanent\_land\_parcels\_deliv20190911      |
+| SAF19\_Seasonal\_Land\_Parcels                               | saf\_seasonal\_land\_parcels\_deliv20190911       |
+| [SAF Scheme Info]                                            |
 | SAF16\_Scheme\_Info                                          |
 | SAF17\_Scheme\_Info                                          |
 | SAF18\_Scheme\_Info                                          |
 | SAF19\_Scheme\_Info                                          | saf\_scheme\_info\_deliv20190911                  |
-| \[Spatial Data\]                                             |
-| LPIS\_LAND\_PARCELS\_2018\_JHI                               |
-| LPIS\_LAND\_PARCELS\_2019\_JHI                               |
-| snapshot\_2017\_0417                                         | lpis\_land\_parcels\_2018\_jhi\_deliv20190911     |
-| lpis\_land\_parcels\_2019\_jhi\_deliv20190911                |
-| snapshot\_2017\_0417\_peudonymised                           |
+| [Spatial Data]                                               |
+| LPIS\_LAND\_PARCELS\_2018\_JHI                               | lpis\_land\_parcels\_2018\_jhi\_deliv20190911     |
+| LPIS\_LAND\_PARCELS\_2019\_JHI                               | lpis\_land\_parcels\_2019\_jhi\_deliv20190911     |
+| snapshot\_2017\_0417                                         | snapshot\_2017\_0417\_peudonymised                |  
+         
 
 
 ## Pseudonymisation
@@ -137,7 +134,7 @@ Table 5: NULL quantifiers in SQL and their counts
 | hapar\_id IS NULL                                                                                              | 131             | 35             |
 
 
-#### Data Cleaning
+### Data Cleaning
 #### land_parcel_area
 The first port of call was to fix instances in the data where (of which there were only 30 records between the two datasets): land_parcel_area IS NULL OR land_parcel_area = 0  
 I fixed this problem in three steps:
