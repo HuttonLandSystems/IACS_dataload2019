@@ -12,7 +12,7 @@ In September 2019, LADSS received a DVD of the new IACS data. The following tabl
 Table 1: Tables received and integrated
 | Tables Received                                              | Tables integrated and pseudonymised at Hutton     |
 |--------------------------------------------------------------|---------------------------------------------------|
-| [Common Grazing 2016 to 2019]                                |
+| **Common Grazing 2016 to 2019**                                |
 | common\_grazing\_lpid\_detail\_effective\_date\_15\_05\_2016 |
 | common\_grazing\_lpid\_detail\_effective\_date\_15\_05\_2017 |
 | common\_grazing\_lpid\_detail\_effective\_date\_15\_05\_2018 |
@@ -21,7 +21,7 @@ Table 1: Tables received and integrated
 | SAF17\_Common\_Grazing\_Share\_Usage                         |
 | SAF18\_Common\_Grazing\_Share\_Usage                         |
 | SAF19\_Common\_Grazing\_Share\_Usage                         | saf\_common\_grazing\_share\_usage\_deliv20190911 |
-| [JHI Attribute Data]                                         |
+| **JHI Attribute Data**                                       |
 | Entitlement\_Year\_2016                                      |
 | Entitlement\_Year\_2017                                      |
 | Entitlement\_Year\_2018                                      |
@@ -32,7 +32,7 @@ Table 1: Tables received and integrated
 | LPID\_field\_LFA\_Classifications\_Payment\_Regions          |
 | LPID\_field\_LFA\_Classifications                            | lpid\_field\_lfa\_classifications\_deliv20190911  |
 | lpid\_payment\_region                                        | lpid\_payment\_region\_deliv20190911              |
-| [SAF Land Parcels Usage]                                     |
+| **SAF Land Parcels Usage**                                   |
 | SAF16\_Permanent\_Land\_Parcels                              |
 | SAF16\_Seasonal\_Land\_Parcels                               |
 | SAF17\_Permanent\_Land\_Parcels                              |
@@ -41,12 +41,12 @@ Table 1: Tables received and integrated
 | SAF18\_Seasonal\_Land\_Parcels                               |
 | SAF19\_Permanent\_Land\_Parcels                              | saf\_permanent\_land\_parcels\_deliv20190911      |
 | SAF19\_Seasonal\_Land\_Parcels                               | saf\_seasonal\_land\_parcels\_deliv20190911       |
-| [SAF Scheme Info]                                            |
+| **SAF Scheme Info**                                          |
 | SAF16\_Scheme\_Info                                          |
 | SAF17\_Scheme\_Info                                          |
 | SAF18\_Scheme\_Info                                          |
 | SAF19\_Scheme\_Info                                          | saf\_scheme\_info\_deliv20190911                  |
-| [Spatial Data]                                               |
+| **Spatial Data**                                             |
 | LPIS\_LAND\_PARCELS\_2018\_JHI                               | lpis\_land\_parcels\_2018\_jhi\_deliv20190911     |
 | LPIS\_LAND\_PARCELS\_2019\_JHI                               | lpis\_land\_parcels\_2019\_jhi\_deliv20190911     |
 | snapshot\_2017\_0417                                         | snapshot\_2017\_0417\_peudonymised                |  
@@ -57,6 +57,8 @@ Table 1: Tables received and integrated
 Data fields which included personally identifiable information were pseudonymised in order to reduce the risks of a meaningful data breach and to fulfil Hutton’s data compliance and GDPR obligations. The newly generated Hutton IDs are incrementing integers which link to the IACS data fields in separate encrypted tables available only to the appointed data manager, Douglas Wardell-Johnson.
 
 The two original tables have row counts of 3,376,660 (permanent) and 317,497 (seasonal). The data lives within pgLADSS, a PostgreSQL database system hosted internally on abpgs01.hutton.ac.uk, in a schema named rpid. Table 2 lists the matching structures of the two tables and describes their class and meaning. As no metadata accompanied the original data transfer, many of the descriptions listed in the table below are my conjecture.
+
+Table 2: Assumed field metadata
 
 | **Column Name** | **Data Class** | **Description** |
 |---|---|---|
