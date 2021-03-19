@@ -30,8 +30,8 @@ Table 1: Tables received and integrated
 | Scheme\_Payment\_2017                                        |
 | Scheme\_Payment\_2018                                        | scheme\_payment\_deliv20190911                    |
 | LPID\_field\_LFA\_Classifications\_Payment\_Regions          |
-| LPID\_field\_LFA\_Classifications                            |
-| lpid\_payment\_region                                        | lpid\_field\_lfa\_classifications\_deliv20190911  |
+| LPID\_field\_LFA\_Classifications                            | lpid\_field\_lfa\_classifications\_deliv20190911  |
+| lpid\_payment\_region                                        | 
 | lpid\_payment\_region\_deliv20190911                         |
 | SAF\_Land\_Parcels\_Usage                                    |
 | SAF16\_Permanent\_Land\_Parcels                              |
@@ -138,7 +138,7 @@ Table 5: NULL quantifiers in SQL and their counts
 
 
 #### Data Cleaning
-land_parcel_area
+#### land_parcel_area
 The first port of call was to fix instances in the data where (of which there were only 30 records between the two datasets): land_parcel_area IS NULL OR land_parcel_area = 0  
 I fixed this problem in three steps:
 1.	Infer land_parcel_area from same hapar_id in different year (8 total)
