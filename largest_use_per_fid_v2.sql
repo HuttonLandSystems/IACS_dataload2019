@@ -86,7 +86,7 @@ FROM
 JOIN lu_rank USING (land_use)) foobar 
 WHERE rn = 1;
 
--- COMMONS
+-- COMMONS 2018
 ----------------------------------------------------------------------------------
 SELECT cg_hahol_id,
        land_use,
@@ -107,4 +107,36 @@ FROM
                    land_use) foo
      JOIN lu_rank USING (land_use)) bar
 WHERE rn = 1;
-              
+
+
+-- COMMONS 2019
+----------------------------------------------------------------------------------
+SELECT cg_hahol_id,
+       land_use,
+       used_area INTO public.ggtemp_delete
+FROM
+    ( SELECT cg_hahol_id,
+             land_use,
+             sum_bps AS used_area,
+             ROW_NUMBER() OVER (PARTITION BY cg_hahol_id
+                                ORDER BY sum_bps DESC, rank) AS rn
+     FROM
+         (SELECT cg_hahol_id,
+                 land_use,
+                 sum(bps_claimed_area) AS sum_bps
+          FROM ladss.saf_commons_2019
+          GROUP BY cg_hahol_id,
+                   land_use) foo
+     JOIN lu_rank USING (land_use)) bar
+WHERE rn = 1;
+
+select cg_hahol_id, land_use, used_area, hapar_id, geom into ladss.saf_commons_2019_largest_use_per_field
+from public.ggtemp_delete
+join 
+(select hapar_id, cg_hahol_id, geom
+from ladss.fields_2019_esri fids 
+join 
+(select hapar_id, cg_hahol_id
+from ladss.saf_commons_2019_field_snapshot) coms
+using (hapar_id)) foo
+using (cg_hahol_id);
